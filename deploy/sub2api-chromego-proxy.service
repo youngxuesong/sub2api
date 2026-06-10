@@ -1,0 +1,19 @@
+[Unit]
+Description=Sub2API ChromeGo Proxy Updater
+Documentation=https://github.com/Wei-Shaw/sub2api
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=sub2api
+Group=sub2api
+WorkingDirectory=/home/sub2api/sub2api-deploy
+EnvironmentFile=-/home/sub2api/sub2api-deploy/chromego-proxy-update.env
+ExecStart=/bin/bash /home/sub2api/sub2api-deploy/chromego-proxy-update.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sub2api-chromego-proxy
+
+[Install]
+WantedBy=multi-user.target

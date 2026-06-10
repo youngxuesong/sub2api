@@ -22,6 +22,10 @@ This directory contains files for deploying Sub2API on Linux servers.
 | `install-datamanagementd.sh` | datamanagementd 一键安装脚本 |
 | `sub2api.service` | Systemd service unit file |
 | `sub2api-datamanagementd.service` | datamanagementd systemd service unit file |
+| `chromego-proxy-update.sh` | ChromeGo 动态代理更新与健康检查切换脚本 |
+| `chromego-proxy-update.env.example` | ChromeGo 动态代理更新环境变量模板 |
+| `sub2api-chromego-proxy.service` | ChromeGo 动态代理 systemd service |
+| `sub2api-chromego-proxy.timer` | ChromeGo 动态代理 systemd timer |
 | `DATAMANAGEMENTD_CN.md` | datamanagementd 部署与联动说明（中文） |
 | `config.example.yaml` | Example configuration file |
 
@@ -155,6 +159,66 @@ SELECT
 - 主进程固定探测 `/tmp/sub2api-datamanagement.sock`
 - Docker 场景下需把宿主机 Socket 挂载到容器内同路径
 - 详细步骤见：`deploy/DATAMANAGEMENTD_CN.md`
+
+### ChromeGo 动态代理自动切换
+
+如果你要把 ChromeGo 的动态节点作为 Sub2API 的出口代理，建议不要直接覆盖现网代理，而是使用 `chromego-proxy-update.sh`：
+
+- 先拉取 ChromeGo 最新 `hysteria2_*.json`
+- 再逐个启动临时 `sing-box` 探针容器做健康检查
+- 只有探针成功出网后，才切换正式代理容器
+- 如果所有候选节点都失败，现网代理保持不变
+
+推荐部署步骤：
+
+```bash
+cd /home/sub2api/sub2api-deploy
+cp deploy/chromego-proxy-update.sh .
+cp deploy/chromego-proxy-update.env.example ./chromego-proxy-update.env
+chmod +x ./chromego-proxy-update.sh
+```
+
+如果你的 Docker 网络名与默认值不同，先修改 `chromego-proxy-update.env` 里的 `DOCKER_NETWORK`。
+
+手动执行一次更新：
+
+```bash
+./chromego-proxy-update.sh
+docker logs --tail 100 sub2api-chromego-proxy-live
+```
+
+启用定时更新：
+
+```bash
+sudo cp deploy/sub2api-chromego-proxy.service /etc/systemd/system/
+sudo cp deploy/sub2api-chromego-proxy.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now sub2api-chromego-proxy.timer
+```
+
+查看状态：
+
+```bash
+systemctl status sub2api-chromego-proxy.timer
+journalctl -u sub2api-chromego-proxy.service -n 100 --no-pager
+tail -n 50 /home/sub2api/sub2api-deploy/chromego-proxy/runtime/audit.log
+```
+
+正式代理容器会以固定网络别名 `sub2api-chromego-proxy` 加入 `sub2api` 所在 Docker 网络。  
+如果你要在 Sub2API 后台把账号流量绑定到它，代理主机填 `sub2api-chromego-proxy`，端口填 `1082`，协议填 `socks5`。
+
+脚本还会写一份独立审计日志到：
+
+```bash
+/home/sub2api/sub2api-deploy/chromego-proxy/runtime/audit.log
+```
+
+每次运行会记录：
+
+- 运行结果（`promoted` / `kept` / `failed` / `skipped`）
+- 切换前后的 live 容器 ID 与创建时间
+- 切换前后的节点来源 URL
+- 切换前后的出口 IP
 
 ### Commands
 
