@@ -143,6 +143,12 @@ services:
       # Proxy for accessing GitHub (online updates + pricing data)
       # Examples: http://host:port, socks5://host:port
       - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
+      # Default outbound proxy for HTTP/HTTPS requests from the sub2api process.
+      # Keep internal service names in NO_PROXY so PostgreSQL/Redis stay direct.
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - ALL_PROXY=${ALL_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-127.0.0.1,localhost,postgres,redis,sub2api-chromego-proxy}
 
       # =======================================================================
       # Image Generation Stream & Concurrency
