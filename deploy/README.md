@@ -226,7 +226,7 @@ journalctl -u sub2api-chromego-proxy.service -n 100 --no-pager
 tail -n 50 /home/sub2api/sub2api-deploy/chromego-proxy/runtime/audit.log
 ```
 
-正式代理容器会以固定网络别名 `sub2api-chromego-proxy` 加入 `sub2api` 所在 Docker 网络。  
+正式代理容器会以固定网络别名 `sub2api-chromego-proxy` 加入 `sub2api` 所在 Docker 网络。
 如果你要在 Sub2API 后台把账号流量绑定到它，代理主机填 `sub2api-chromego-proxy`，端口填 `1082`，协议填 `socks5`。
 
 如果你要让 `sub2api` 容器本身的大多数默认 HTTP/HTTPS 出站也走这条动态代理，可在 `.env` 里额外设置：
