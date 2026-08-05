@@ -145,3 +145,4 @@ aicodex
 output/
 .gstack/
 .secrets/
+.worktrees/
