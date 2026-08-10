@@ -397,6 +397,15 @@
                 }}</span>
               </button>
               <button
+                v-if="row.platform !== 'composite'"
+                data-testid="group-route-failover"
+                @click="handleRouteFailover(row)"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-emerald-600 dark:hover:bg-dark-700 dark:hover:text-emerald-400"
+              >
+                <Icon name="shield" size="sm" />
+                <span class="text-xs">{{ t("admin.groups.routeFailover.action") }}</span>
+              </button>
+              <button
                 @click="handleRateMultipliers(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-purple-600 dark:hover:bg-dark-700 dark:hover:text-purple-400"
               >
@@ -4343,6 +4352,12 @@
       @close="showRPMOverridesModal = false"
       @success="loadGroups"
     />
+
+    <RouteFailoverModal
+      :show="showRouteFailoverModal"
+      :group="routeFailoverGroup"
+      @close="closeRouteFailoverModal"
+    />
   </AppLayout>
 </template>
 
@@ -4375,6 +4390,7 @@ import PlatformIcon from "@/components/common/PlatformIcon.vue";
 import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
+import RouteFailoverModal from "@/components/admin/group/RouteFailoverModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
 import ReasoningEffortPolicyFields from "@/components/admin/group/ReasoningEffortPolicyFields.vue";
 import { VueDraggable } from "vue-draggable-plus";
@@ -4850,6 +4866,8 @@ const showRateMultipliersModal = ref(false);
 const rateMultipliersGroup = ref<AdminGroup | null>(null);
 const showRPMOverridesModal = ref(false);
 const rpmOverridesGroup = ref<AdminGroup | null>(null);
+const showRouteFailoverModal = ref(false);
+const routeFailoverGroup = ref<AdminGroup | null>(null);
 const sortableGroups = ref<AdminGroup[]>([]);
 type ConcreteGroupPlatform = Exclude<GroupPlatform, "composite">;
 type CompositeRouteFormState = {
@@ -6246,6 +6264,16 @@ const handleRateMultipliers = (group: AdminGroup) => {
 const handleRPMOverrides = (group: AdminGroup) => {
   rpmOverridesGroup.value = group;
   showRPMOverridesModal.value = true;
+};
+
+const handleRouteFailover = (group: AdminGroup) => {
+  routeFailoverGroup.value = group;
+  showRouteFailoverModal.value = true;
+};
+
+const closeRouteFailoverModal = () => {
+  showRouteFailoverModal.value = false;
+  routeFailoverGroup.value = null;
 };
 
 const handleDuplicate = async (group: AdminGroup) => {

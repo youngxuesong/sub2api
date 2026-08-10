@@ -9,18 +9,18 @@ const {
   listGroups,
   duplicateGroup,
   getModelsListCandidates,
+  getLiveCapability,
   getUsageSummary,
   getCapacitySummary,
-  getLiveCapability,
   showSuccess,
   showError
 } = vi.hoisted(() => ({
   listGroups: vi.fn(),
   duplicateGroup: vi.fn(),
   getModelsListCandidates: vi.fn(),
+  getLiveCapability: vi.fn(),
   getUsageSummary: vi.fn(),
   getCapacitySummary: vi.fn(),
-  getLiveCapability: vi.fn(),
   showSuccess: vi.fn(),
   showError: vi.fn()
 }))
@@ -31,9 +31,9 @@ vi.mock('@/api/admin', () => ({
       list: listGroups,
       duplicate: duplicateGroup,
       getModelsListCandidates,
+      getLiveCapability,
       getUsageSummary,
       getCapacitySummary,
-      getLiveCapability,
       getAll: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -136,6 +136,11 @@ const DataTableStub = defineComponent({
   template: '<div><div v-for="row in data" :key="row.id"><slot name="cell-actions" :row="row" /></div></div>'
 })
 
+const RouteFailoverModalStub = defineComponent({
+  props: { show: Boolean, group: Object },
+  template: '<div data-testid="route-failover-modal" :data-show="String(show)" :data-group-id="group?.id" />'
+})
+
 function mountView() {
   return mount(GroupsView, {
     global: {
@@ -153,6 +158,7 @@ function mountView() {
         GroupCapacityBadge: true,
         GroupRateMultipliersModal: true,
         GroupRPMOverridesModal: true,
+        RouteFailoverModal: RouteFailoverModalStub,
         VueDraggable: true
       }
     }
@@ -190,9 +196,9 @@ describe('GroupsView duplicate action', () => {
       status: 'inactive'
     })
     getModelsListCandidates.mockResolvedValue([])
+    getLiveCapability.mockResolvedValue({ supported: false })
     getUsageSummary.mockResolvedValue([])
     getCapacitySummary.mockResolvedValue([])
-    getLiveCapability.mockResolvedValue({ supported: false })
   })
 
   afterEach(() => {
@@ -268,6 +274,19 @@ describe('GroupsView duplicate action', () => {
     expect(showSuccess).toHaveBeenCalledWith('admin.groups.duplicateSuccess')
     expect(showError).toHaveBeenCalledWith('admin.groups.failedToLoad')
     expect(showError).not.toHaveBeenCalledWith('admin.groups.duplicateFailed')
+    wrapper.unmount()
+  })
+
+  it('opens route failover configuration for a normal group', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="group-route-failover"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="route-failover-modal"]').attributes()).toMatchObject({
+      'data-show': 'true',
+      'data-group-id': '42'
+    })
     wrapper.unmount()
   })
 })

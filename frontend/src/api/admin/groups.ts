@@ -11,6 +11,8 @@ import type {
   CompositeModelRouteInput,
   CompositeRoutePreviewRequest,
   CompositeRouteDecision,
+  RouteFailoverPolicy,
+  RouteFailoverPolicyInput,
   CreateGroupRequest,
   UpdateGroupRequest,
   PaginatedResponse
@@ -227,6 +229,29 @@ export async function update(id: number, updates: UpdateGroupRequest): Promise<A
  */
 export async function deleteGroup(id: number): Promise<{ message: string }> {
   const { data } = await apiClient.delete<{ message: string }>(`/admin/groups/${id}`)
+  return data
+}
+
+export async function getRouteFailoverPolicy(id: number): Promise<RouteFailoverPolicy> {
+  const { data } = await apiClient.get<RouteFailoverPolicy>(`/admin/groups/${id}/route-failover`)
+  return data
+}
+
+export async function saveRouteFailoverPolicy(
+  id: number,
+  policy: RouteFailoverPolicyInput
+): Promise<RouteFailoverPolicy> {
+  const { data } = await apiClient.put<RouteFailoverPolicy>(
+    `/admin/groups/${id}/route-failover`,
+    policy
+  )
+  return data
+}
+
+export async function deleteRouteFailoverPolicy(id: number): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>(
+    `/admin/groups/${id}/route-failover`
+  )
   return data
 }
 
@@ -485,6 +510,9 @@ export const groupsAPI = {
   duplicate,
   update,
   delete: deleteGroup,
+  getRouteFailoverPolicy,
+  saveRouteFailoverPolicy,
+  deleteRouteFailoverPolicy,
   toggleStatus,
   getStats,
   getGroupApiKeys,

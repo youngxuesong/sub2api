@@ -634,6 +634,40 @@ export interface AdminGroup extends Group {
   sort_order: number
 }
 
+export interface RouteFailoverTarget {
+  id: number
+  policy_id: number
+  target_group_id: number
+  priority: number
+  enabled: boolean
+  model_mapping: Record<string, string>
+}
+
+export interface RouteFailoverTargetInput {
+  id?: number
+  target_group_id: number
+  priority: number
+  enabled: boolean
+  model_mapping: Record<string, string>
+}
+
+export interface RouteFailoverPolicyInput {
+  enabled: boolean
+  max_attempts: number
+  failure_threshold: number
+  success_threshold: number
+  window_seconds: number
+  open_cooldown_seconds: number
+  half_open_lease_seconds: number
+  targets: RouteFailoverTargetInput[]
+}
+
+export interface RouteFailoverPolicy extends RouteFailoverPolicyInput {
+  id: number
+  source_group_id: number
+  targets: RouteFailoverTarget[]
+}
+
 export interface ModelsListConfig {
   enabled: boolean
   models: string[]
