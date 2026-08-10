@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -905,7 +906,31 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	// 分组利润控制：legacy 公共入口同样装门，保证不经
 	// selectAccountWithScheduler 的调用方也无法绕过利润准入。
 	ctx = s.withOpenAIProfitControlGate(ctx, groupID)
-	return s.selectAccountWithLoadAwareness(ctx, groupID, PlatformOpenAI, sessionHash, requestedModel, excludedIDs, false, "", true)
+	selection, _, err := s.selectAccountWithSchedulerAndRouteFailover(
+		ctx, groupID, "", sessionHash, requestedModel,
+		excludedIDs, OpenAIUpstreamTransportAny, "", "", false,
+		PlatformOpenAI, false, true, false,
+	)
+	return selection, err
+}
+
+func (s *OpenAIGatewayService) RecordRouteFailoverOutcome(ctx context.Context, selection *AccountSelectionResult, forwardErr error) {
+	if s.routeFailoverPlanner == nil || selection == nil || selection.RouteTargetID == 0 {
+		return
+	}
+	candidate := RouteFailoverCandidate{
+		TargetID: selection.RouteTargetID, Model: selection.EffectiveModel,
+		CircuitModel: selection.RouteCircuitModel, IsFallback: true,
+		LeaseID: selection.RouteLeaseID,
+	}
+	if forwardErr == nil {
+		s.routeFailoverPlanner.RecordSuccess(ctx, selection.RouteSourceGroupID, candidate)
+		return
+	}
+	var failoverErr *UpstreamFailoverError
+	if errors.As(forwardErr, &failoverErr) && failoverErr.ShouldRecordRouteFailover() {
+		s.routeFailoverPlanner.RecordFailure(ctx, selection.RouteSourceGroupID, candidate)
+	}
 }
 
 func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Context, groupID *int64, platform string, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, requireCompact bool, requiredCapability OpenAIEndpointCapability, useUpstreamTokenCost bool) (*AccountSelectionResult, error) {

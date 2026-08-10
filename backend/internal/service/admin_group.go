@@ -110,6 +110,27 @@ func (s *adminServiceImpl) ListCompositeRoutes(ctx context.Context, groupID int6
 	return s.compositeRouteRepo.ListByGroup(ctx, groupID, true)
 }
 
+func (s *adminServiceImpl) GetRouteFailoverPolicy(ctx context.Context, groupID int64) (*RouteFailoverPolicy, error) {
+	if s.routeFailoverManager == nil {
+		return nil, ErrRouteFailoverPolicyNotFound
+	}
+	return s.routeFailoverManager.Get(ctx, groupID)
+}
+
+func (s *adminServiceImpl) SaveRouteFailoverPolicy(ctx context.Context, groupID int64, policy RouteFailoverPolicy) (*RouteFailoverPolicy, error) {
+	if s.routeFailoverManager == nil {
+		return nil, fmt.Errorf("route failover manager is unavailable")
+	}
+	return s.routeFailoverManager.Save(ctx, groupID, policy)
+}
+
+func (s *adminServiceImpl) DeleteRouteFailoverPolicy(ctx context.Context, groupID int64) error {
+	if s.routeFailoverManager == nil {
+		return ErrRouteFailoverPolicyNotFound
+	}
+	return s.routeFailoverManager.Delete(ctx, groupID)
+}
+
 func (s *adminServiceImpl) CreateCompositeRoute(ctx context.Context, groupID int64, input CompositeRouteInput) (*CompositeModelRoute, error) {
 	if err := s.requireCompositeGroup(ctx, groupID); err != nil {
 		return nil, err

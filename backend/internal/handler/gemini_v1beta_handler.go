@@ -400,13 +400,14 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 
 		// 检测账号切换：如果粘性会话绑定的账号与当前选择的账号不同，清除 thoughtSignature
 		// 注意：Gemini 原生 API 的 thoughtSignature 与具体上游账号强相关；跨账号透传会导致 400。
+		cleanThoughtSignatures := false
 		if sessionBoundAccountID > 0 && sessionBoundAccountID != account.ID {
 			reqLog.Info("gemini.sticky_session_account_switched",
 				zap.Int64("from_account_id", sessionBoundAccountID),
 				zap.Int64("to_account_id", account.ID),
 				zap.Bool("clean_thought_signature", true),
 			)
-			body = service.CleanGeminiNativeThoughtSignatures(body)
+			cleanThoughtSignatures = true
 			sessionBoundAccountID = account.ID
 		} else if sessionKey != "" && sessionBoundAccountID == 0 && !cleanedForUnknownBinding && bytes.Contains(body, []byte(`"thoughtSignature"`)) {
 			// 无缓存绑定但请求里已有 thoughtSignature：常见于缓存丢失/TTL 过期后，客户端继续携带旧签名。
@@ -414,13 +415,20 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			reqLog.Info("gemini.sticky_session_binding_missing",
 				zap.Bool("clean_thought_signature", true),
 			)
-			body = service.CleanGeminiNativeThoughtSignatures(body)
+			cleanThoughtSignatures = true
 			cleanedForUnknownBinding = true
 			sessionBoundAccountID = account.ID
 		} else if sessionBoundAccountID == 0 {
 			// 记录本次请求中首次选择到的账号，便于同一请求内 failover 时检测切换。
 			sessionBoundAccountID = account.ID
 		}
+		effectiveModel, forwardBody := prepareGeminiForwardBody(
+			h.gatewayService,
+			selection,
+			modelName,
+			body,
+			cleanThoughtSignatures,
+		)
 
 		// 4) account concurrency slot
 		accountReleaseFunc := selection.ReleaseFunc
@@ -490,7 +498,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		// 等待路径保持既有 eager 绑定（无门时 helper 直接绑定）；调度器已抢槽
 		// 的直达路径无门时由选号内部绑定，这里只在门下补准入后绑定。
 		if selection.ProfitGateActive() || !selection.Acquired {
-			if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, apiKey.GroupID, sessionKey, account.ID); err != nil {
+			if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, effectiveSelectionGroupID(selection, apiKey.GroupID), sessionKey, account.ID); err != nil {
 				reqLog.Warn("gemini.bind_sticky_session_after_profit_admission_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 			}
 		}
@@ -503,25 +511,26 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		if fs.SwitchCount > 0 {
 			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 		}
-		sessionGroupID := derefGroupID(apiKey.GroupID)
+		sessionGroupID := derefGroupID(effectiveSelectionGroupID(selection, apiKey.GroupID))
 		if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
 			result, err = h.antigravityGatewayService.ForwardGemini(
 				requestCtx,
 				c,
 				account,
-				modelName,
+				effectiveModel,
 				action,
 				stream,
-				body,
+				forwardBody,
 				hasBoundSession,
 				service.WithForwardGeminiSession(sessionGroupID, sessionKey),
 			)
 		} else {
-			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, modelName, action, stream, body)
+			result, err = h.geminiCompatService.ForwardNative(requestCtx, c, account, effectiveModel, action, stream, forwardBody)
 		}
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}
+		recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, err)
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {

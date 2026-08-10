@@ -11,7 +11,7 @@ The architecture covers all protocols, but implementation is phased. Phase 1 is 
 
 Environment roles are fixed:
 
-- `172.16.22.46`: production
+- `47.119.114.46`: production
 - `172.16.22.73`: testing
 
 All validation and fault injection happen on 73 before any policy is enabled on 46.
@@ -410,7 +410,7 @@ Acceptance criteria are:
 
 ## 19. Production Rollout
 
-On `172.16.22.46`:
+On `47.119.114.46`:
 
 1. Back up PostgreSQL and apply additive migrations.
 2. Deploy code with the feature disabled.

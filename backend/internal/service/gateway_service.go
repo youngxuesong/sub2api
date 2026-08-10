@@ -557,10 +557,16 @@ type AccountWaitPlan struct {
 }
 
 type AccountSelectionResult struct {
-	Account     *Account
-	Acquired    bool
-	ReleaseFunc func()
-	WaitPlan    *AccountWaitPlan // nil means no wait allowed
+	Account            *Account
+	Acquired           bool
+	ReleaseFunc        func()
+	WaitPlan           *AccountWaitPlan // nil means no wait allowed
+	EffectiveGroupID   int64
+	RouteSourceGroupID int64
+	RouteTargetID      int64
+	EffectiveModel     string
+	RouteCircuitModel  string
+	RouteLeaseID       string
 	// profitGate 携带本次选号真实生效的利润门（无门为 nil）。门安装在调度栈的
 	// 局部 ctx 上，handler 必须经 ContextWithSelectionProfitGate 重放后才能在
 	// 调度栈之外做抢槽后终检与准入后粘性绑定。
@@ -635,6 +641,7 @@ const (
 	GatewayFailureScopeAccount  GatewayFailureScope = "account"
 	GatewayFailureScopeProvider GatewayFailureScope = "provider"
 	GatewayFailureScopeRequest  GatewayFailureScope = "request"
+	GatewayFailureScopeRoute    GatewayFailureScope = "route"
 )
 
 // NextAccountAction is tri-state for backwards compatibility. The zero value
@@ -691,6 +698,16 @@ func (e *UpstreamFailoverError) ShouldReportAccountScheduleFailure() bool {
 		return false
 	}
 	return !e.IsCredentialFailure() || e.Scope == GatewayFailureScopeAccount
+}
+
+// ShouldRecordRouteFailover limits circuit health updates to errors that can
+// plausibly affect the target provider/route. Account and request scoped errors
+// must not open a group circuit shared by otherwise healthy accounts.
+func (e *UpstreamFailoverError) ShouldRecordRouteFailover() bool {
+	if e == nil {
+		return false
+	}
+	return e.Scope == GatewayFailureScopeProvider || e.Scope == GatewayFailureScopeRoute
 }
 
 // sseStreamErrorEventError 表示上游 SSE 流体内出现 event:error 帧。
@@ -763,6 +780,7 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	routeFailoverPlanner  *RouteFailoverPlanner
 }
 
 // NewGatewayService creates a new GatewayService
@@ -795,6 +813,7 @@ func NewGatewayService(
 	compositeResolver *CompositeRouteResolver,
 	balanceNotifyService *BalanceNotifyService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	routeFailoverPlanner *RouteFailoverPlanner,
 ) *GatewayService {
 	userGroupRateTTL := resolveUserGroupRateCacheTTL(cfg)
 	modelsListTTL := resolveModelsListCacheTTL(cfg)
@@ -832,6 +851,7 @@ func NewGatewayService(
 		compositeResolver:     compositeResolver,
 		balanceNotifyService:  balanceNotifyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		routeFailoverPlanner:  routeFailoverPlanner,
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

@@ -70,6 +70,7 @@ var ProviderSet = wire.NewSet(
 	NewGroupRepository,
 	NewAdminGroupRepository,
 	NewCompositeModelRouteRepository,
+	NewRouteFailoverRepository,
 	NewAccountRepository,
 	NewAdminAccountRepository,
 	NewScheduledTestPlanRepository,   // 定时测试计划仓储
@@ -137,6 +138,7 @@ var ProviderSet = wire.NewSet(
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
 	NewContentModerationHashCache,
+	NewRouteFailoverCircuit,
 
 	// Encryptors
 	NewAESEncryptor,

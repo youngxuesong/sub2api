@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -241,6 +242,117 @@ type CompositeRouteRequest struct {
 type CompositeRoutePreviewRequest struct {
 	Model    string `json:"model" binding:"required"`
 	Endpoint string `json:"endpoint" binding:"omitempty,oneof=any messages count_tokens responses chat_completions embeddings images gemini"`
+}
+
+type RouteFailoverTargetRequest struct {
+	ID            int64             `json:"id" binding:"omitempty,gt=0"`
+	TargetGroupID int64             `json:"target_group_id" binding:"required,gt=0"`
+	Priority      int               `json:"priority"`
+	Enabled       *bool             `json:"enabled"`
+	ModelMapping  map[string]string `json:"model_mapping"`
+}
+
+type RouteFailoverPolicyRequest struct {
+	Enabled              bool                         `json:"enabled"`
+	MaxAttempts          int                          `json:"max_attempts" binding:"omitempty,min=1,max=10"`
+	FailureThreshold     int                          `json:"failure_threshold" binding:"omitempty,min=1"`
+	SuccessThreshold     int                          `json:"success_threshold" binding:"omitempty,min=1"`
+	WindowSeconds        int                          `json:"window_seconds" binding:"omitempty,min=1"`
+	OpenCooldownSeconds  int                          `json:"open_cooldown_seconds" binding:"omitempty,min=1"`
+	HalfOpenLeaseSeconds int                          `json:"half_open_lease_seconds" binding:"omitempty,min=1"`
+	Targets              []RouteFailoverTargetRequest `json:"targets" binding:"max=9,dive"`
+}
+
+type routeFailoverAdminService interface {
+	GetRouteFailoverPolicy(ctx context.Context, groupID int64) (*service.RouteFailoverPolicy, error)
+	SaveRouteFailoverPolicy(ctx context.Context, groupID int64, policy service.RouteFailoverPolicy) (*service.RouteFailoverPolicy, error)
+	DeleteRouteFailoverPolicy(ctx context.Context, groupID int64) error
+}
+
+func (h *GroupHandler) GetRouteFailoverPolicy(c *gin.Context) {
+	groupID, ok := parsePositiveIDParam(c, "id")
+	if !ok {
+		return
+	}
+	adminService, ok := h.adminService.(routeFailoverAdminService)
+	if !ok {
+		response.InternalError(c, "Route failover service unavailable")
+		return
+	}
+	policy, err := adminService.GetRouteFailoverPolicy(c.Request.Context(), groupID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, routeFailoverPolicyToResponse(policy))
+}
+
+func (h *GroupHandler) SaveRouteFailoverPolicy(c *gin.Context) {
+	groupID, ok := parsePositiveIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var req RouteFailoverPolicyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body: "+err.Error())
+		return
+	}
+	policy := service.RouteFailoverPolicy{
+		Enabled: req.Enabled, MaxAttempts: req.MaxAttempts,
+		FailureThreshold: req.FailureThreshold, SuccessThreshold: req.SuccessThreshold,
+		Window:        time.Duration(req.WindowSeconds) * time.Second,
+		OpenCooldown:  time.Duration(req.OpenCooldownSeconds) * time.Second,
+		HalfOpenLease: time.Duration(req.HalfOpenLeaseSeconds) * time.Second,
+		Targets:       make([]service.RouteFailoverTarget, 0, len(req.Targets)),
+	}
+	for _, target := range req.Targets {
+		enabled := true
+		if target.Enabled != nil {
+			enabled = *target.Enabled
+		}
+		policy.Targets = append(policy.Targets, service.RouteFailoverTarget{
+			ID: target.ID, TargetGroupID: target.TargetGroupID, Priority: target.Priority,
+			Enabled: enabled, ModelMapping: target.ModelMapping,
+		})
+	}
+	adminService, ok := h.adminService.(routeFailoverAdminService)
+	if !ok {
+		response.InternalError(c, "Route failover service unavailable")
+		return
+	}
+	saved, err := adminService.SaveRouteFailoverPolicy(c.Request.Context(), groupID, policy)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, routeFailoverPolicyToResponse(saved))
+}
+
+func (h *GroupHandler) DeleteRouteFailoverPolicy(c *gin.Context) {
+	groupID, ok := parsePositiveIDParam(c, "id")
+	if !ok {
+		return
+	}
+	adminService, ok := h.adminService.(routeFailoverAdminService)
+	if !ok {
+		response.InternalError(c, "Route failover service unavailable")
+		return
+	}
+	if err := adminService.DeleteRouteFailoverPolicy(c.Request.Context(), groupID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"message": "Route failover policy deleted"})
+}
+
+func routeFailoverPolicyToResponse(policy *service.RouteFailoverPolicy) gin.H {
+	return gin.H{
+		"id": policy.ID, "source_group_id": policy.SourceGroupID, "enabled": policy.Enabled,
+		"max_attempts": policy.MaxAttempts, "failure_threshold": policy.FailureThreshold,
+		"success_threshold": policy.SuccessThreshold, "window_seconds": int(policy.Window / time.Second),
+		"open_cooldown_seconds":   int(policy.OpenCooldown / time.Second),
+		"half_open_lease_seconds": int(policy.HalfOpenLease / time.Second), "targets": policy.Targets,
+	}
 }
 
 // List handles listing all groups with pagination

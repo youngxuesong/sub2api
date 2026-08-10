@@ -850,15 +850,15 @@ from tools.route_failover_v2_verify import build_parser, validate_environment
 class RouteFailoverV2VerifyTest(unittest.TestCase):
     def test_verifier_rejects_production_mutation_flags(self):
         parser = build_parser()
-        args = parser.parse_args(["--base-url", "http://172.16.22.46:8080", "--admin-token-env", "TOKEN", "--group-id", "1", "--environment-role", "production"])
+        args = parser.parse_args(["--base-url", "http://47.119.114.46:8080", "--admin-token-env", "TOKEN", "--group-id", "1", "--environment-role", "production"])
         self.assertFalse(hasattr(args, "enable"))
         self.assertFalse(hasattr(args, "save"))
 
     def test_verifier_requires_expected_environment_role(self):
         with self.assertRaises(SystemExit):
-            validate_environment("http://172.16.22.46:8080", "test")
+            validate_environment("http://47.119.114.46:8080", "test")
         validate_environment("http://172.16.22.73:8080", "test")
-        validate_environment("http://172.16.22.46:8080", "production")
+        validate_environment("http://47.119.114.46:8080", "production")
 ```
 
 - [ ] **Step 2: Run verifier tests and verify the tool is missing**
@@ -907,7 +907,7 @@ The runbook fixes roles as:
 
 ```text
 172.16.22.73 = test
-172.16.22.46 = production
+47.119.114.46 = production
 ```
 
 It includes migration backup checks, `off -> shadow -> enforce` gates, fault-injection ownership, abort thresholds, and the rule that no 46 change occurs from `tools/deploy_sub2api_local_73.py`. It also states WARP/DNS/Docker failover is infrastructure-level and must not be simulated by opening business route circuits.
@@ -946,7 +946,7 @@ Prerequisite: set `SUB2API_SSH_PASSWORD` in the secure shell environment without
 
 Run: `python tools/deploy_sub2api_local_73.py --tag route-failover-v2-off`
 
-Expected: the script reports a healthy `sub2api` container on 172.16.22.73 and does not connect to 172.16.22.46.
+Expected: the script reports a healthy `sub2api` container on 172.16.22.73 and does not connect to 47.119.114.46.
 
 - [ ] **Step 3: Verify migrations and disabled behavior on 73**
 
@@ -994,7 +994,7 @@ Deploy through the production Docker workflow, not `tools/deploy_sub2api_local_7
 
 - [ ] **Step 3: Verify 46 read-only runtime state**
 
-Run: `python tools/route_failover_v2_verify.py --base-url http://172.16.22.46:8080 --admin-token-env SUB2API_ADMIN_TOKEN --group-id $env:ROUTE_V2_PRODUCTION_GROUP_ID --environment-role production`
+Run: `python tools/route_failover_v2_verify.py --base-url http://47.119.114.46:8080 --admin-token-env SUB2API_ADMIN_TOKEN --group-id $env:ROUTE_V2_PRODUCTION_GROUP_ID --environment-role production`
 
 Expected: correct production host, healthy snapshot/Redis, debug headers false, and no customer policy enabled.
 

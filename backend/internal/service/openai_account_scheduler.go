@@ -2047,7 +2047,7 @@ func (s *OpenAIGatewayService) SelectAccountWithScheduler(
 	requiredTransport OpenAIUpstreamTransport,
 	requireCompact bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", "", requireCompact, PlatformOpenAI, false, true)
+	return s.selectAccountWithSchedulerAndRouteFailover(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, "", "", requireCompact, PlatformOpenAI, false, true, false)
 }
 
 // SelectAccountWithSchedulerForCapability 按能力要求调度账号。
@@ -2071,7 +2071,31 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapability(
 	if len(platformOverride) > 0 {
 		platform = platformOverride[0]
 	}
-	return s.selectAccountWithScheduler(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost)
+	return s.selectAccountWithSchedulerAndRouteFailover(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost, false)
+}
+
+// SelectAccountWithSchedulerForCapabilityWithRouteFailover opts a supported text
+// endpoint into cross-group routing. Other scheduler callers remain isolated
+// because they do not yet rewrite bodies or record upstream outcomes.
+func (s *OpenAIGatewayService) SelectAccountWithSchedulerForCapabilityWithRouteFailover(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requireCompact bool,
+	previousResponseCanMove bool,
+	useUpstreamTokenCost bool,
+	platformOverride ...string,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	platform := PlatformOpenAI
+	if len(platformOverride) > 0 {
+		platform = platformOverride[0]
+	}
+	return s.selectAccountWithSchedulerAndRouteFailover(ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs, requiredTransport, requiredCapability, "", requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost, true)
 }
 
 func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
@@ -2082,13 +2106,13 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 	excludedIDs map[int64]struct{},
 	requiredCapability OpenAIImagesCapability,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
-	selection, decision, err := s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI, false, false)
+	selection, decision, err := s.selectAccountWithSchedulerAndRouteFailover(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", requiredCapability, false, PlatformOpenAI, false, false, false)
 	if err == nil && selection != nil && selection.Account != nil {
 		return selection, decision, nil
 	}
 	// 如果要求 native 能力（如指定了模型）但没有可用的 APIKey 账号，回退到 basic（OAuth 账号）
 	if requiredCapability == OpenAIImagesCapabilityNative {
-		return s.selectAccountWithScheduler(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI, false, false)
+		return s.selectAccountWithSchedulerAndRouteFailover(ctx, groupID, "", sessionHash, requestedModel, excludedIDs, OpenAIUpstreamTransportHTTPSSE, "", OpenAIImagesCapabilityBasic, false, PlatformOpenAI, false, false, false)
 	}
 	return selection, decision, err
 }
@@ -2100,6 +2124,87 @@ func (s *OpenAIGatewayService) SelectAccountWithSchedulerForImages(
 // zeroing out capacity. The retry re-runs the exact same selection with the
 // quarantine checks bypassed, so healthy proxies always win the first pass
 // and quarantined ones only serve when nothing else can.
+func (s *OpenAIGatewayService) selectAccountWithSchedulerAndRouteFailover(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	sessionHash string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredTransport OpenAIUpstreamTransport,
+	requiredCapability OpenAIEndpointCapability,
+	requiredImageCapability OpenAIImagesCapability,
+	requireCompact bool,
+	platform string,
+	previousResponseCanMove bool,
+	useUpstreamTokenCost bool,
+	enableRouteFailover bool,
+) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
+	primary, decision, primaryErr := s.selectAccountWithScheduler(
+		ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs,
+		requiredTransport, requiredCapability, requiredImageCapability, requireCompact,
+		platform, previousResponseCanMove, useUpstreamTokenCost,
+	)
+	if primaryErr == nil {
+		if primary != nil && groupID != nil {
+			primary.EffectiveGroupID = *groupID
+			primary.RouteSourceGroupID = *groupID
+			primary.EffectiveModel = requestedModel
+		}
+		return primary, decision, nil
+	}
+	if !enableRouteFailover || s.routeFailoverPlanner == nil || groupID == nil || *groupID <= 0 || !routeFailoverSelectionExhausted(primaryErr) {
+		return nil, decision, primaryErr
+	}
+
+	sourceGroupID := *groupID
+	candidates, err := s.routeFailoverPlanner.Candidates(ctx, sourceGroupID, requestedModel)
+	if err != nil || len(candidates) <= 1 {
+		return nil, decision, primaryErr
+	}
+	lastErr := primaryErr
+	lastDecision := decision
+	for _, candidate := range candidates[1:] {
+		effectiveGroupID := candidate.GroupID
+		mapping, _ := s.ResolveChannelMappingAndRestrict(ctx, &effectiveGroupID, candidate.Model)
+		if mapping.Mapped && strings.TrimSpace(mapping.MappedModel) != "" {
+			candidate.Model = mapping.MappedModel
+		}
+		selection, fallbackDecision, selectErr := s.selectAccountWithScheduler(
+			ctx, &effectiveGroupID, previousResponseID, sessionHash, candidate.Model,
+			excludedIDs, requiredTransport, requiredCapability, requiredImageCapability,
+			requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost,
+		)
+		lastDecision = fallbackDecision
+		if selectErr == nil {
+			admitted, allowed := s.routeFailoverPlanner.Admit(ctx, sourceGroupID, candidate)
+			if !allowed {
+				releaseUnadmittedRouteSelection(selection)
+				continue
+			}
+			candidate = admitted
+			if selection != nil {
+				selection.EffectiveGroupID = effectiveGroupID
+				selection.RouteSourceGroupID = sourceGroupID
+				selection.RouteTargetID = candidate.TargetID
+				selection.EffectiveModel = candidate.Model
+				selection.RouteCircuitModel = candidate.CircuitModel
+				selection.RouteLeaseID = candidate.LeaseID
+			}
+			return selection, fallbackDecision, nil
+		}
+		lastErr = selectErr
+		if !routeFailoverSelectionExhausted(selectErr) {
+			return nil, fallbackDecision, selectErr
+		}
+	}
+	return nil, lastDecision, lastErr
+}
+
+func routeFailoverSelectionExhausted(err error) bool {
+	return errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts)
+}
+
 func (s *OpenAIGatewayService) selectAccountWithScheduler(
 	ctx context.Context,
 	groupID *int64,

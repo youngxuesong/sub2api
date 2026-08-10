@@ -556,6 +556,24 @@ func ProvideScheduledTestService(
 	return NewScheduledTestService(planRepo, resultRepo)
 }
 
+func ProvideRouteFailoverPlanner(
+	repo RouteFailoverConfigRepository,
+	groupRepo GroupRepository,
+	circuit RouteFailoverCircuit,
+) *RouteFailoverPlanner {
+	planner := NewRouteFailoverPlanner(repo, groupRepo, circuit, time.Minute)
+	_ = planner.Reload(context.Background())
+	return planner
+}
+
+func ProvideRouteFailoverManager(
+	repo RouteFailoverConfigRepository,
+	groupRepo GroupRepository,
+	planner *RouteFailoverPlanner,
+) *RouteFailoverManager {
+	return NewRouteFailoverManager(repo, groupRepo, planner)
+}
+
 // ProvideScheduledTestRunnerService creates and starts ScheduledTestRunnerService.
 func ProvideScheduledTestRunnerService(
 	planRepo ScheduledTestPlanRepository,
@@ -755,6 +773,8 @@ var ProviderSet = wire.NewSet(
 	ProvideAuthCacheInvalidationWorker,
 	NewGroupService,
 	NewCompositeRouteResolver,
+	ProvideRouteFailoverPlanner,
+	ProvideRouteFailoverManager,
 	NewAccountService,
 	NewProxyService,
 	NewRedeemService,
@@ -767,7 +787,7 @@ var ProviderSet = wire.NewSet(
 	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,
-	NewOpenAIGatewayService,
+	ProvideOpenAIGatewayService,
 	ProvideImageStorageSettingService,
 	ProvideImageTaskService,
 	ProvideBatchImageModelPricingResolver,

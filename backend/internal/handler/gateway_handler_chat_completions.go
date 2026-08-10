@@ -262,6 +262,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if channelMapping.Mapped {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 		}
+		if selection.RouteTargetID > 0 && selection.EffectiveModel != "" {
+			forwardBody = h.gatewayService.ReplaceModelInBody(forwardBody, selection.EffectiveModel)
+		}
 		var result *service.ForwardResult
 		setActualUpstreamEndpoint(c, "")
 		if account.Platform == service.PlatformGemini {
@@ -290,6 +293,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		if accountReleaseFunc != nil {
 			accountReleaseFunc()
 		}
+		recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, err)
 
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError

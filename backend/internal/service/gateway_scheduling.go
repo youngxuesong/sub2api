@@ -6,6 +6,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	mathrand "math/rand"
@@ -98,6 +99,134 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 // metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 // sub2apiUserID: 系统用户 ID，用于二维亲和调度
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
+	if s.routeFailoverPlanner == nil || groupID == nil || *groupID <= 0 {
+		return s.selectAccountWithLoadAwarenessInGroup(ctx, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+	}
+	sourceGroupID := *groupID
+	primary, primaryErr := s.selectAccountWithLoadAwarenessInGroup(ctx, groupID, sessionHash, requestedModel, excludedIDs, metadataUserID, sub2apiUserID)
+	if primaryErr == nil {
+		primary.EffectiveGroupID = sourceGroupID
+		primary.RouteSourceGroupID = sourceGroupID
+		primary.EffectiveModel = requestedModel
+		return primary, nil
+	}
+	if !errors.Is(primaryErr, ErrNoAvailableAccounts) {
+		return nil, primaryErr
+	}
+	candidates, err := s.routeFailoverPlanner.Candidates(ctx, sourceGroupID, requestedModel)
+	if err != nil || len(candidates) == 0 {
+		return nil, primaryErr
+	}
+	lastErr := primaryErr
+	for _, candidate := range candidates[1:] {
+		effectiveGroupID := candidate.GroupID
+		mapping, _ := s.ResolveChannelMappingAndRestrict(ctx, &effectiveGroupID, candidate.Model)
+		if mapping.Mapped && strings.TrimSpace(mapping.MappedModel) != "" {
+			candidate.Model = mapping.MappedModel
+		}
+		result, selectErr := s.selectAccountWithLoadAwarenessInGroup(ctx, &effectiveGroupID, sessionHash, candidate.Model, excludedIDs, metadataUserID, sub2apiUserID)
+		if selectErr == nil {
+			admitted, allowed := s.routeFailoverPlanner.Admit(ctx, sourceGroupID, candidate)
+			if !allowed {
+				releaseUnadmittedRouteSelection(result)
+				continue
+			}
+			candidate = admitted
+			result.EffectiveGroupID = effectiveGroupID
+			result.RouteSourceGroupID = sourceGroupID
+			result.RouteTargetID = candidate.TargetID
+			result.EffectiveModel = candidate.Model
+			result.RouteCircuitModel = candidate.CircuitModel
+			result.RouteLeaseID = candidate.LeaseID
+			return result, nil
+		}
+		lastErr = selectErr
+		if !errors.Is(selectErr, ErrNoAvailableAccounts) {
+			return nil, selectErr
+		}
+	}
+	return nil, lastErr
+}
+
+// SelectAccountForModelWithRouteFailover selects without acquiring concurrency slots.
+// It is used by lightweight endpoints such as count_tokens.
+func (s *GatewayService) SelectAccountForModelWithRouteFailover(ctx context.Context, groupID *int64, sessionHash, requestedModel string, excludedIDs map[int64]struct{}) (*AccountSelectionResult, error) {
+	account, primaryErr := s.SelectAccountForModelWithExclusions(ctx, groupID, sessionHash, requestedModel, excludedIDs)
+	if primaryErr == nil {
+		result := &AccountSelectionResult{Account: account, EffectiveModel: requestedModel}
+		if groupID != nil {
+			result.EffectiveGroupID = *groupID
+			result.RouteSourceGroupID = *groupID
+		}
+		return result, nil
+	}
+	if s.routeFailoverPlanner == nil || groupID == nil || *groupID <= 0 || !errors.Is(primaryErr, ErrNoAvailableAccounts) {
+		return nil, primaryErr
+	}
+
+	sourceGroupID := *groupID
+	candidates, err := s.routeFailoverPlanner.Candidates(ctx, sourceGroupID, requestedModel)
+	if err != nil || len(candidates) <= 1 {
+		return nil, primaryErr
+	}
+	lastErr := primaryErr
+	for _, candidate := range candidates[1:] {
+		effectiveGroupID := candidate.GroupID
+		mapping, _ := s.ResolveChannelMappingAndRestrict(ctx, &effectiveGroupID, candidate.Model)
+		if mapping.Mapped && strings.TrimSpace(mapping.MappedModel) != "" {
+			candidate.Model = mapping.MappedModel
+		}
+		account, selectErr := s.SelectAccountForModelWithExclusions(ctx, &effectiveGroupID, sessionHash, candidate.Model, excludedIDs)
+		if selectErr == nil {
+			admitted, allowed := s.routeFailoverPlanner.Admit(ctx, sourceGroupID, candidate)
+			if !allowed {
+				continue
+			}
+			candidate = admitted
+			return &AccountSelectionResult{
+				Account: account, EffectiveGroupID: effectiveGroupID,
+				RouteSourceGroupID: sourceGroupID, RouteTargetID: candidate.TargetID,
+				EffectiveModel: candidate.Model, RouteCircuitModel: candidate.CircuitModel,
+				RouteLeaseID: candidate.LeaseID,
+			}, nil
+		}
+		lastErr = selectErr
+		if !errors.Is(selectErr, ErrNoAvailableAccounts) {
+			return nil, selectErr
+		}
+	}
+	return nil, lastErr
+}
+
+func releaseUnadmittedRouteSelection(selection *AccountSelectionResult) {
+	if selection == nil || selection.ReleaseFunc == nil {
+		return
+	}
+	selection.ReleaseFunc()
+	selection.ReleaseFunc = nil
+}
+
+func (s *GatewayService) RecordRouteFailoverSuccess(ctx context.Context, selection *AccountSelectionResult) {
+	if s.routeFailoverPlanner == nil || selection == nil || selection.RouteTargetID == 0 {
+		return
+	}
+	s.routeFailoverPlanner.RecordSuccess(ctx, selection.RouteSourceGroupID, RouteFailoverCandidate{
+		TargetID: selection.RouteTargetID, Model: selection.EffectiveModel, CircuitModel: selection.RouteCircuitModel,
+		IsFallback: true, LeaseID: selection.RouteLeaseID,
+	})
+}
+
+func (s *GatewayService) RecordRouteFailoverFailure(ctx context.Context, selection *AccountSelectionResult) {
+	if s.routeFailoverPlanner == nil || selection == nil || selection.RouteTargetID == 0 {
+		return
+	}
+	s.routeFailoverPlanner.RecordFailure(ctx, selection.RouteSourceGroupID, RouteFailoverCandidate{
+		TargetID: selection.RouteTargetID, Model: selection.EffectiveModel, CircuitModel: selection.RouteCircuitModel,
+		IsFallback: true, LeaseID: selection.RouteLeaseID,
+	})
+}
+
+func (s *GatewayService) selectAccountWithLoadAwarenessInGroup(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string, sub2apiUserID int64) (*AccountSelectionResult, error) {
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
 	for id := range excludedIDs {

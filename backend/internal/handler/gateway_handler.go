@@ -59,6 +59,47 @@ type GatewayHandler struct {
 	settingService            *service.SettingService
 }
 
+func effectiveSelectionGroupID(selection *service.AccountSelectionResult, original *int64) *int64 {
+	if selection != nil && selection.EffectiveGroupID > 0 {
+		return &selection.EffectiveGroupID
+	}
+	return original
+}
+
+func routeFailoverForwardBody(gateway *service.GatewayService, selection *service.AccountSelectionResult, requestedModel string, body []byte) (string, []byte) {
+	effectiveModel := requestedModel
+	if gateway == nil || selection == nil || selection.EffectiveModel == "" || selection.EffectiveModel == requestedModel {
+		return effectiveModel, body
+	}
+	effectiveModel = selection.EffectiveModel
+	return effectiveModel, gateway.ReplaceModelInBody(body, effectiveModel)
+}
+
+// prepareGeminiForwardBody applies account-specific signature cleanup before
+// rewriting the model selected for a route-failover target. The order matters:
+// ReplaceModelInBody must never operate on a body that still contains a stale
+// thoughtSignature from a different upstream account.
+func prepareGeminiForwardBody(gateway *service.GatewayService, selection *service.AccountSelectionResult, requestedModel string, body []byte, cleanThoughtSignatures bool) (string, []byte) {
+	if cleanThoughtSignatures {
+		body = service.CleanGeminiNativeThoughtSignatures(body)
+	}
+	return routeFailoverForwardBody(gateway, selection, requestedModel, body)
+}
+
+func recordRouteFailoverOutcome(ctx context.Context, gateway *service.GatewayService, selection *service.AccountSelectionResult, forwardErr error) {
+	if gateway == nil || selection == nil || selection.RouteTargetID == 0 {
+		return
+	}
+	if forwardErr == nil {
+		gateway.RecordRouteFailoverSuccess(ctx, selection)
+		return
+	}
+	var failoverErr *service.UpstreamFailoverError
+	if errors.As(forwardErr, &failoverErr) && failoverErr.ShouldRecordRouteFailover() {
+		gateway.RecordRouteFailoverFailure(ctx, selection)
+	}
+}
+
 // NewGatewayHandler creates a new GatewayHandler
 func NewGatewayHandler(
 	gatewayService *service.GatewayService,
@@ -354,6 +395,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 			account := selection.Account
+			effectiveModel, forwardBody := routeFailoverForwardBody(h.gatewayService, selection, reqModel, body)
 			setOpsSelectedAccount(c, account.ID, account.Platform)
 
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
@@ -445,7 +487,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 等待路径保持既有 eager 绑定（无门时 helper 直接绑定）；调度器已
 			// 抢槽的直达路径无门时由选号内部绑定，这里只在门下补准入后绑定。
 			if selection.ProfitGateActive() || !selection.Acquired {
-				if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, apiKey.GroupID, sessionKey, account.ID); err != nil {
+				if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, effectiveSelectionGroupID(selection, apiKey.GroupID), sessionKey, account.ID); err != nil {
 					reqLog.Warn("gateway.bind_sticky_session_after_profit_admission_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				}
 			}
@@ -465,19 +507,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					requestCtx,
 					c,
 					account,
-					reqModel,
+					effectiveModel,
 					"generateContent",
 					reqStream,
-					body,
+					forwardBody,
 					hasBoundSession,
-					service.WithForwardGeminiSession(derefGroupID(apiKey.GroupID), sessionKey),
+					service.WithForwardGeminiSession(derefGroupID(effectiveSelectionGroupID(selection, apiKey.GroupID)), sessionKey),
 				)
 			} else {
-				result, err = h.geminiCompatService.Forward(requestCtx, c, account, body)
+				result, err = h.geminiCompatService.Forward(requestCtx, c, account, forwardBody)
 			}
 			if accountReleaseFunc != nil {
 				accountReleaseFunc()
 			}
+			recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, err)
 			if err != nil {
 				var failoverErr *service.UpstreamFailoverError
 				if errors.As(err, &failoverErr) {
@@ -768,7 +811,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 等待路径保持既有 eager 绑定（无门时 helper 直接绑定）；调度器已
 			// 抢槽的直达路径无门时由选号内部绑定，这里只在门下补准入后绑定。
 			if selection.ProfitGateActive() || !selection.Acquired {
-				if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, currentAPIKey.GroupID, sessionKey, account.ID); err != nil {
+				reqLog.Info("sticky.bind_after_wait",
+					zap.String("session_key", sessionKey),
+					zap.Int64("account_id", account.ID),
+				)
+				if err := h.gatewayService.BindStickySessionAfterProfitAdmission(admissionCtx, effectiveSelectionGroupID(selection, currentAPIKey.GroupID), sessionKey, account.ID); err != nil {
 					reqLog.Warn("gateway.bind_sticky_session_after_profit_admission_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				}
 			}
@@ -832,6 +879,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				attemptParsedReq.Model = channelMapping.MappedModel
 				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), channelMapping.MappedModel)); err != nil {
 					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
+					return
+				}
+			}
+			// Route failover selects against the effective target group. Its model
+			// mapping must be the final rewrite after the source channel mapping.
+			if selection.RouteTargetID > 0 && selection.EffectiveModel != "" && selection.EffectiveModel != attemptParsedReq.Model {
+				attemptParsedReq.Model = selection.EffectiveModel
+				if err := attemptParsedReq.ReplaceBody(h.gatewayService.ReplaceModelInBody(attemptParsedReq.Body.Bytes(), selection.EffectiveModel)); err != nil {
+					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to map route failover model")
 					return
 				}
 			}
@@ -930,6 +986,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				})
 			}
 
+			recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, err)
 			if err != nil {
 				// Beta policy block: return 400 immediately, no failover
 				var betaBlockedErr *service.BetaBlockedError
@@ -1052,7 +1109,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// - 粘性账号因负载/RPM 被跳过、选中了其他账号：不覆盖原绑定，
 			//   下次请求粘性账号恢复后仍可命中
 			if sessionKey != "" && (sessionBoundAccountID == 0 || sessionBoundAccountID == account.ID) {
-				if err := h.gatewayService.BindStickySession(c.Request.Context(), currentAPIKey.GroupID, sessionKey, account.ID); err != nil {
+				if err := h.gatewayService.BindStickySession(c.Request.Context(), effectiveSelectionGroupID(selection, currentAPIKey.GroupID), sessionKey, account.ID); err != nil {
 					reqLog.Warn("gateway.bind_sticky_session_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 				}
 			}
@@ -2055,7 +2112,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
 
 	// 选择支持该模型的账号
-	account, err := h.gatewayService.SelectAccountForModel(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model)
+	selection, err := h.gatewayService.SelectAccountForModelWithRouteFailover(c.Request.Context(), apiKey.GroupID, sessionHash, parsedReq.Model, nil)
 	if err != nil {
 		reqLog.Warn("gateway.count_tokens_select_account_failed", zap.Error(err))
 		cls := classifyNoAccountErrorFromGin(c, h.gatewayService, apiKey, parsedReq.Model, parsedReq.Model, service.PlatformAnthropic)
@@ -2065,14 +2122,27 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		h.errorResponse(c, cls.Status, cls.ErrType, cls.Message)
 		return
 	}
+	account := selection.Account
 	setOpsSelectedAccount(c, account.ID, account.Platform)
+	attemptParsedReq := parsedReq
+	if selection.EffectiveModel != "" && selection.EffectiveModel != parsedReq.Model {
+		mappedBody := h.gatewayService.ReplaceModelInBody(parsedReq.Body.Bytes(), selection.EffectiveModel)
+		attemptParsedReq, err = parsedReq.CloneForBody(mappedBody)
+		if err != nil {
+			h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "invalid mapped request body")
+			return
+		}
+		attemptParsedReq.Model = selection.EffectiveModel
+	}
 
 	// 转发请求（不记录使用量）
-	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, parsedReq); err != nil {
+	if err := h.gatewayService.ForwardCountTokens(c.Request.Context(), c, account, attemptParsedReq); err != nil {
+		recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, err)
 		reqLog.Error("gateway.count_tokens_forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		// 错误响应已在 ForwardCountTokens 中处理
 		return
 	}
+	recordRouteFailoverOutcome(c.Request.Context(), h.gatewayService, selection, nil)
 }
 
 // InterceptType 表示请求拦截类型
