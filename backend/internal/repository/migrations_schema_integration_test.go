@@ -5,12 +5,81 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"io/fs"
 	"sync"
 	"testing"
+	"testing/fstest"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/migrations"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMigration221BackfillsExistingAPIKeyRouteConfigVersion(t *testing.T) {
+	ctx := context.Background()
+	db := newMigrationBoundaryDatabase(t)
+
+	require.NoError(t, applyMigrationsFS(ctx, db, migrationsThrough(t, "220_clear_non_grok_video_generation_config.sql")))
+
+	var routeConfigColumnExists bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+SELECT EXISTS (
+	SELECT 1
+	FROM information_schema.columns
+	WHERE table_schema = 'public'
+	  AND table_name = 'api_keys'
+	  AND column_name = 'route_config_version'
+)
+`).Scan(&routeConfigColumnExists))
+	require.False(t, routeConfigColumnExists, "pre-221 schema must not contain route_config_version")
+
+	var userID int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+INSERT INTO users (email, password_hash, role, status, balance, concurrency)
+VALUES ('pre-221@example.com', 'hash', 'user', 'active', 0, 1)
+RETURNING id
+`).Scan(&userID))
+
+	var apiKeyID int64
+	require.NoError(t, db.QueryRowContext(ctx, `
+INSERT INTO api_keys (user_id, key, name, status)
+VALUES ($1, 'sk-pre-221', 'pre-221', 'active')
+RETURNING id
+`, userID).Scan(&apiKeyID))
+
+	migration221, err := migrations.FS.ReadFile("221_api_key_route_failover.sql")
+	require.NoError(t, err)
+	require.NoError(t, applyMigrationsFS(ctx, db, fstest.MapFS{
+		"221_api_key_route_failover.sql": &fstest.MapFile{Data: migration221},
+	}))
+
+	var routeConfigVersion int64
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT route_config_version FROM api_keys WHERE id = $1", apiKeyID).Scan(&routeConfigVersion))
+	require.Equal(t, int64(1), routeConfigVersion)
+
+	var targetCount int
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_key_route_failover_targets").Scan(&targetCount))
+	require.Zero(t, targetCount, "migration must not create route failover targets for existing API keys")
+}
+
+func migrationsThrough(t *testing.T, lastFilename string) fstest.MapFS {
+	t.Helper()
+
+	entries, err := fs.ReadDir(migrations.FS, ".")
+	require.NoError(t, err)
+
+	result := make(fstest.MapFS)
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() > lastFilename {
+			continue
+		}
+
+		content, err := migrations.FS.ReadFile(entry.Name())
+		require.NoError(t, err)
+		result[entry.Name()] = &fstest.MapFile{Data: content}
+	}
+	return result
+}
 
 func TestMigrationsRunner_ConcurrentInstancesSerializeOnSessionLock(t *testing.T) {
 	const instances = 2

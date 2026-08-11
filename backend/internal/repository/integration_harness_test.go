@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -23,7 +24,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	redisclient "github.com/redis/go-redis/v9"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
@@ -35,9 +36,10 @@ const (
 )
 
 var (
-	integrationDB        *sql.DB
-	integrationEntClient *dbent.Client
-	integrationRedis     *redisclient.Client
+	integrationDB          *sql.DB
+	integrationEntClient   *dbent.Client
+	integrationRedis       *redisclient.Client
+	integrationPostgresDSN string
 
 	redisNamespaceSeq uint64
 )
@@ -90,6 +92,7 @@ func TestMain(m *testing.M) {
 		log.Printf("failed to get postgres dsn: %v", err)
 		os.Exit(1)
 	}
+	integrationPostgresDSN = dsn
 
 	integrationDB, err = openSQLWithRetry(ctx, dsn, 30*time.Second)
 	if err != nil {
@@ -198,6 +201,36 @@ func pingWithTimeout(ctx context.Context, db *sql.DB, timeout time.Duration) err
 	pingCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	return db.PingContext(pingCtx)
+}
+
+func newMigrationBoundaryDatabase(t *testing.T) *sql.DB {
+	t.Helper()
+	ctx := context.Background()
+	databaseName := fmt.Sprintf("sub2api_migration_boundary_%d", time.Now().UnixNano())
+
+	_, err := integrationDB.ExecContext(ctx, "CREATE DATABASE "+pq.QuoteIdentifier(databaseName))
+	require.NoError(t, err, "create isolated migration boundary database")
+
+	var boundaryDB *sql.DB
+	t.Cleanup(func() {
+		if boundaryDB != nil {
+			_ = boundaryDB.Close()
+		}
+		_, _ = integrationDB.ExecContext(ctx, `
+SELECT pg_terminate_backend(pid)
+FROM pg_stat_activity
+WHERE datname = $1 AND pid <> pg_backend_pid()
+`, databaseName)
+		_, _ = integrationDB.ExecContext(ctx, "DROP DATABASE IF EXISTS "+pq.QuoteIdentifier(databaseName))
+	})
+
+	parsedDSN, err := url.Parse(integrationPostgresDSN)
+	require.NoError(t, err, "parse integration PostgreSQL DSN")
+	parsedDSN.Path = "/" + databaseName
+
+	boundaryDB, err = openSQLWithRetry(ctx, parsedDSN.String(), 30*time.Second)
+	require.NoError(t, err, "open isolated migration boundary database")
+	return boundaryDB
 }
 
 func testTx(t *testing.T) *sql.Tx {
