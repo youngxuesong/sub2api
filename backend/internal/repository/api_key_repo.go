@@ -10,6 +10,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/apikeyroutefailovertarget"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -40,8 +41,32 @@ func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
 	return r.client.APIKey.Query().Where(apikey.DeletedAtIsNil())
 }
 
+func withAPIKeyRouteTargets(q *dbent.APIKeyQuery) *dbent.APIKeyQuery {
+	return q.WithRouteFailoverTargets(func(tq *dbent.APIKeyRouteFailoverTargetQuery) {
+		tq.Order(
+			dbent.Asc(apikeyroutefailovertarget.FieldPriority),
+			dbent.Asc(apikeyroutefailovertarget.FieldID),
+		).WithTargetGroup()
+	})
+}
+
+func apiKeyByIDQuery(client *dbent.Client, id int64) *dbent.APIKeyQuery {
+	return withAPIKeyRouteTargets(client.APIKey.Query().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		WithUser().
+		WithGroup())
+}
+
 func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) error {
-	builder := r.client.APIKey.Create().
+	created, err := buildAPIKeyCreate(r.client, key).Save(ctx)
+	if err == nil {
+		applyCreatedAPIKey(key, created)
+	}
+	return translatePersistenceError(err, nil, service.ErrAPIKeyExists)
+}
+
+func buildAPIKeyCreate(client *dbent.Client, key *service.APIKey) *dbent.APIKeyCreate {
+	builder := client.APIKey.Create().
 		SetUserID(key.UserID).
 		SetKey(key.Key).
 		SetName(key.Name).
@@ -61,23 +86,75 @@ func (r *apiKeyRepository) Create(ctx context.Context, key *service.APIKey) erro
 	if len(key.IPBlacklist) > 0 {
 		builder.SetIPBlacklist(key.IPBlacklist)
 	}
-
-	created, err := builder.Save(ctx)
-	if err == nil {
-		key.ID = created.ID
-		key.LastUsedAt = created.LastUsedAt
-		key.CreatedAt = created.CreatedAt
-		key.UpdatedAt = created.UpdatedAt
+	if key.RouteConfigVersion > 0 {
+		builder.SetRouteConfigVersion(key.RouteConfigVersion)
 	}
-	return translatePersistenceError(err, nil, service.ErrAPIKeyExists)
+	builder.SetNillableFailoverRiskAcknowledgedAt(key.FailoverRiskAcknowledgedAt)
+	return builder
+}
+
+func applyCreatedAPIKey(key *service.APIKey, created *dbent.APIKey) {
+	key.ID = created.ID
+	key.LastUsedAt = created.LastUsedAt
+	key.CreatedAt = created.CreatedAt
+	key.UpdatedAt = created.UpdatedAt
+	key.RouteConfigVersion = created.RouteConfigVersion
+	key.FailoverRiskAcknowledgedAt = created.FailoverRiskAcknowledgedAt
+}
+
+func (r *apiKeyRepository) CreateWithRoute(ctx context.Context, key *service.APIKey, targetGroupIDs []int64) error {
+	return r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
+		created, err := buildAPIKeyCreate(client, key).Save(txCtx)
+		if err != nil {
+			return translatePersistenceError(err, nil, service.ErrAPIKeyExists)
+		}
+		if err := createAPIKeyRouteTargets(txCtx, client, created.ID, targetGroupIDs); err != nil {
+			return err
+		}
+
+		loaded, err := apiKeyByIDQuery(client, created.ID).Only(txCtx)
+		if err != nil {
+			return err
+		}
+		*key = *apiKeyEntityToService(loaded)
+		return nil
+	})
+}
+
+func createAPIKeyRouteTargets(ctx context.Context, client *dbent.Client, apiKeyID int64, targetGroupIDs []int64) error {
+	if len(targetGroupIDs) == 0 {
+		return nil
+	}
+	builders := make([]*dbent.APIKeyRouteFailoverTargetCreate, 0, len(targetGroupIDs))
+	for i, groupID := range targetGroupIDs {
+		builders = append(builders, client.APIKeyRouteFailoverTarget.Create().
+			SetAPIKeyID(apiKeyID).
+			SetTargetGroupID(groupID).
+			SetPriority(i+1))
+	}
+	_, err := client.APIKeyRouteFailoverTarget.CreateBulk(builders...).Save(ctx)
+	return err
+}
+
+func (r *apiKeyRepository) withRouteTransaction(ctx context.Context, fn func(context.Context, *dbent.Client) error) error {
+	if existing := dbent.TxFromContext(ctx); existing != nil {
+		return fn(ctx, existing.Client())
+	}
+
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+	if err := fn(txCtx, tx.Client()); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (r *apiKeyRepository) GetByID(ctx context.Context, id int64) (*service.APIKey, error) {
-	m, err := r.activeQuery().
-		Where(apikey.IDEQ(id)).
-		WithUser().
-		WithGroup().
-		Only(ctx)
+	m, err := apiKeyByIDQuery(r.client, id).Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
 			return nil, service.ErrAPIKeyNotFound
@@ -107,14 +184,14 @@ func (r *apiKeyRepository) GetKeyAndOwnerID(ctx context.Context, id int64) (stri
 }
 
 func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.APIKey, error) {
-	m, err := r.activeQuery().
+	m, err := withAPIKeyRouteTargets(r.activeQuery().
 		Where(apikey.KeyEQ(key)).
 		WithUser(func(q *dbent.UserQuery) {
 			q.WithAllowedGroups(func(gq *dbent.GroupQuery) {
 				gq.Select(group.FieldID)
 			})
 		}).
-		WithGroup().
+		WithGroup()).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -126,7 +203,7 @@ func (r *apiKeyRepository) GetByKey(ctx context.Context, key string) (*service.A
 }
 
 func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*service.APIKey, error) {
-	m, err := r.activeQuery().
+	m, err := withAPIKeyRouteTargets(r.activeQuery().
 		Where(apikey.KeyEQ(key)).
 		Select(
 			apikey.FieldID,
@@ -142,6 +219,8 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 			apikey.FieldRateLimit5h,
 			apikey.FieldRateLimit1d,
 			apikey.FieldRateLimit7d,
+			apikey.FieldRouteConfigVersion,
+			apikey.FieldFailoverRiskAcknowledgedAt,
 		).
 		WithUser(func(q *dbent.UserQuery) {
 			q.Select(
@@ -222,7 +301,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 				group.FieldProfitMinMargin,
 				group.FieldProfitSafetyBuffer,
 			)
-		}).
+		})).
 		Only(ctx)
 	if err != nil {
 		if dbent.IsNotFound(err) {
@@ -320,6 +399,16 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 			builder.ClearIPBlacklist()
 		}
 	}
+	if fields.RouteConfig {
+		builder.SetRouteConfigVersion(key.RouteConfigVersion)
+	}
+	if fields.RiskAcknowledgement {
+		if key.FailoverRiskAcknowledgedAt != nil {
+			builder.SetFailoverRiskAcknowledgedAt(*key.FailoverRiskAcknowledgedAt)
+		} else {
+			builder.ClearFailoverRiskAcknowledgedAt()
+		}
+	}
 
 	affected, err := builder.Save(ctx)
 	if err != nil {
@@ -333,6 +422,68 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 	// 使用同一时间戳回填，避免并发删除导致二次查询失败。
 	key.UpdatedAt = now
 	return nil
+}
+
+func (r *apiKeyRepository) UpdateWithRoute(
+	ctx context.Context,
+	key *service.APIKey,
+	fields service.APIKeyUpdateFields,
+	route service.APIKeyRouteMutation,
+) error {
+	return r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
+		baseFields := fields
+		baseFields.RouteConfig = false
+		baseFields.RiskAcknowledgement = false
+		if !baseFields.IsEmpty() {
+			if err := r.Update(txCtx, key, baseFields); err != nil {
+				return err
+			}
+		}
+
+		if fields.RouteConfig || fields.RiskAcknowledgement {
+			builder := client.APIKey.Update().
+				Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
+				SetUpdatedAt(time.Now())
+			if fields.RouteConfig && route.IncrementVersion {
+				builder.AddRouteConfigVersion(1)
+			}
+			if fields.RiskAcknowledgement {
+				if route.ClearRiskAcknowledgement {
+					builder.ClearFailoverRiskAcknowledgedAt()
+				} else {
+					builder.SetNillableFailoverRiskAcknowledgedAt(route.RiskAcknowledgedAt)
+				}
+			}
+			affected, err := builder.Save(txCtx)
+			if err != nil {
+				return err
+			}
+			if affected == 0 {
+				return service.ErrAPIKeyNotFound
+			}
+		}
+
+		if route.ReplaceTargets {
+			if _, err := client.APIKeyRouteFailoverTarget.Delete().
+				Where(apikeyroutefailovertarget.APIKeyIDEQ(key.ID)).
+				Exec(txCtx); err != nil {
+				return err
+			}
+			if err := createAPIKeyRouteTargets(txCtx, client, key.ID, route.TargetGroupIDs); err != nil {
+				return err
+			}
+		}
+
+		loaded, err := apiKeyByIDQuery(client, key.ID).Only(txCtx)
+		if err != nil {
+			if dbent.IsNotFound(err) {
+				return service.ErrAPIKeyNotFound
+			}
+			return err
+		}
+		*key = *apiKeyEntityToService(loaded)
+		return nil
+	})
 }
 
 func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
@@ -454,10 +605,10 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 		return nil, nil, err
 	}
 
-	keysQuery := q.
+	keysQuery := withAPIKeyRouteTargets(q.
 		WithGroup().
 		Offset(params.Offset()).
-		Limit(params.Limit())
+		Limit(params.Limit()))
 	for _, order := range apiKeyListOrder(params) {
 		keysQuery = keysQuery.Order(order)
 	}
@@ -479,9 +630,9 @@ func (r *apiKeyRepository) ListByUserID(ctx context.Context, userID int64, param
 }
 
 func (r *apiKeyRepository) ListAllByUserID(ctx context.Context, userID int64, filters service.APIKeyListFilters) ([]service.APIKey, error) {
-	keys, err := r.apiKeyListByUserIDQuery(userID, filters).
+	keys, err := withAPIKeyRouteTargets(r.apiKeyListByUserIDQuery(userID, filters).
 		WithGroup().
-		Order(dbent.Asc(apikey.FieldID)).
+		Order(dbent.Asc(apikey.FieldID))).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -618,10 +769,10 @@ func (r *apiKeyRepository) ListByGroupID(ctx context.Context, groupID int64, par
 		return nil, nil, err
 	}
 
-	keysQuery := q.
+	keysQuery := withAPIKeyRouteTargets(q.
 		WithUser().
 		Offset(params.Offset()).
-		Limit(params.Limit())
+		Limit(params.Limit()))
 	for _, order := range apiKeyListOrder(params) {
 		keysQuery = keysQuery.Order(order)
 	}
@@ -686,7 +837,7 @@ func (r *apiKeyRepository) SearchAPIKeys(ctx context.Context, userID int64, keyw
 		q = q.Where(apikey.NameContainsFold(keyword))
 	}
 
-	keys, err := q.Limit(limit).Order(dbent.Desc(apikey.FieldID)).All(ctx)
+	keys, err := withAPIKeyRouteTargets(q.Limit(limit).Order(dbent.Desc(apikey.FieldID))).All(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -736,13 +887,25 @@ func (r *apiKeyRepository) ListKeysByUserID(ctx context.Context, userID int64) (
 
 func (r *apiKeyRepository) ListKeysByGroupID(ctx context.Context, groupID int64) ([]string, error) {
 	keys, err := r.activeQuery().
-		Where(apikey.GroupIDEQ(groupID)).
+		Where(apikey.Or(
+			apikey.GroupIDEQ(groupID),
+			apikey.HasRouteFailoverTargetsWith(apikeyroutefailovertarget.TargetGroupIDEQ(groupID)),
+		)).
 		Select(apikey.FieldKey).
 		Strings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return keys, nil
+	seen := make(map[string]struct{}, len(keys))
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, key)
+	}
+	return result, nil
 }
 
 // IncrementQuotaUsed 使用 Ent 原子递增 quota_used 字段并返回新值
@@ -864,29 +1027,31 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 		return nil
 	}
 	out := &service.APIKey{
-		ID:            m.ID,
-		UserID:        m.UserID,
-		Key:           m.Key,
-		Name:          m.Name,
-		Status:        m.Status,
-		IPWhitelist:   m.IPWhitelist,
-		IPBlacklist:   m.IPBlacklist,
-		LastUsedAt:    m.LastUsedAt,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		GroupID:       m.GroupID,
-		Quota:         m.Quota,
-		QuotaUsed:     m.QuotaUsed,
-		ExpiresAt:     m.ExpiresAt,
-		RateLimit5h:   m.RateLimit5h,
-		RateLimit1d:   m.RateLimit1d,
-		RateLimit7d:   m.RateLimit7d,
-		Usage5h:       m.Usage5h,
-		Usage1d:       m.Usage1d,
-		Usage7d:       m.Usage7d,
-		Window5hStart: m.Window5hStart,
-		Window1dStart: m.Window1dStart,
-		Window7dStart: m.Window7dStart,
+		ID:                         m.ID,
+		UserID:                     m.UserID,
+		Key:                        m.Key,
+		Name:                       m.Name,
+		Status:                     m.Status,
+		IPWhitelist:                m.IPWhitelist,
+		IPBlacklist:                m.IPBlacklist,
+		LastUsedAt:                 m.LastUsedAt,
+		CreatedAt:                  m.CreatedAt,
+		UpdatedAt:                  m.UpdatedAt,
+		GroupID:                    m.GroupID,
+		Quota:                      m.Quota,
+		QuotaUsed:                  m.QuotaUsed,
+		ExpiresAt:                  m.ExpiresAt,
+		RateLimit5h:                m.RateLimit5h,
+		RateLimit1d:                m.RateLimit1d,
+		RateLimit7d:                m.RateLimit7d,
+		Usage5h:                    m.Usage5h,
+		Usage1d:                    m.Usage1d,
+		Usage7d:                    m.Usage7d,
+		Window5hStart:              m.Window5hStart,
+		Window1dStart:              m.Window1dStart,
+		Window7dStart:              m.Window7dStart,
+		RouteConfigVersion:         m.RouteConfigVersion,
+		FailoverRiskAcknowledgedAt: m.FailoverRiskAcknowledgedAt,
 	}
 	if m.Edges.User != nil {
 		out.User = userEntityToService(m.Edges.User)
@@ -901,6 +1066,24 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 	}
 	if m.Edges.Group != nil {
 		out.Group = groupEntityToService(m.Edges.Group)
+	}
+	if targets := m.Edges.RouteFailoverTargets; len(targets) > 0 {
+		out.FallbackTargets = make([]service.APIKeyFailoverTarget, 0, len(targets))
+		for _, target := range targets {
+			if target == nil {
+				continue
+			}
+			mapped := service.APIKeyFailoverTarget{
+				ID:            target.ID,
+				APIKeyID:      target.APIKeyID,
+				TargetGroupID: target.TargetGroupID,
+				Priority:      target.Priority,
+			}
+			if target.Edges.TargetGroup != nil {
+				mapped.Group = groupEntityToService(target.Edges.TargetGroup)
+			}
+			out.FallbackTargets = append(out.FallbackTargets, mapped)
+		}
 	}
 	return out
 }

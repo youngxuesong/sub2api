@@ -14,6 +14,26 @@ const (
 	StatusAPIKeyExpired        = "expired"
 )
 
+const MaxAPIKeyFallbackGroups = 5
+
+type APIKeyFailoverTarget struct {
+	ID                      int64
+	APIKeyID                int64
+	TargetGroupID           int64
+	Priority                int
+	Group                   *Group
+	UserGroupRPMOverride    *int
+	EffectiveRateMultiplier float64
+}
+
+type APIKeyRouteMutation struct {
+	ReplaceTargets           bool
+	TargetGroupIDs           []int64
+	IncrementVersion         bool
+	RiskAcknowledgedAt       *time.Time
+	ClearRiskAcknowledgement bool
+}
+
 // Rate limit window durations
 const (
 	RateLimitWindow5h = 5 * time.Hour
@@ -37,15 +57,18 @@ type APIKey struct {
 	IPWhitelist []string
 	IPBlacklist []string
 	// 预编译的 IP 规则，用于认证热路径避免重复 ParseIP/ParseCIDR。
-	CompiledIPWhitelist *ip.CompiledIPRules `json:"-"`
-	CompiledIPBlacklist *ip.CompiledIPRules `json:"-"`
-	LastUsedAt          *time.Time
-	LastUsedIP          *string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	User                *User
-	Group               *Group
-	CurrentConcurrency  int
+	CompiledIPWhitelist        *ip.CompiledIPRules `json:"-"`
+	CompiledIPBlacklist        *ip.CompiledIPRules `json:"-"`
+	LastUsedAt                 *time.Time
+	LastUsedIP                 *string
+	CreatedAt                  time.Time
+	UpdatedAt                  time.Time
+	User                       *User
+	Group                      *Group
+	CurrentConcurrency         int
+	RouteConfigVersion         int64
+	FailoverRiskAcknowledgedAt *time.Time
+	FallbackTargets            []APIKeyFailoverTarget
 
 	// Quota fields
 	Quota     float64    // Quota limit in USD (0 = unlimited)

@@ -74,6 +74,10 @@ type APIKeyUpdateFields struct {
 	RateLimitUsage bool
 	// IPRules 覆盖 ip_whitelist 与 ip_blacklist。
 	IPRules bool
+	// RouteConfig controls route_config_version updates.
+	RouteConfig bool
+	// RiskAcknowledgement controls failover_risk_acknowledged_at updates.
+	RiskAcknowledgement bool
 }
 
 // IsEmpty 报告该次 Update 是否不写任何列。
@@ -118,6 +122,13 @@ type APIKeyRepository interface {
 	IncrementRateLimitUsage(ctx context.Context, id int64, cost float64) error
 	ResetRateLimitWindows(ctx context.Context, id int64) error
 	GetRateLimitData(ctx context.Context, id int64) (*APIKeyRateLimitData, error)
+}
+
+// APIKeyRouteRepository is an optional narrow capability for atomically
+// persisting an API key together with its ordered fallback targets.
+type APIKeyRouteRepository interface {
+	CreateWithRoute(ctx context.Context, key *APIKey, targetGroupIDs []int64) error
+	UpdateWithRoute(ctx context.Context, key *APIKey, fields APIKeyUpdateFields, route APIKeyRouteMutation) error
 }
 
 type apiKeyAllByUserIDLister interface {
