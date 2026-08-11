@@ -1,7 +1,7 @@
 # API Key Route Failover Design
 
 Date: 2026-08-11
-Status: Approved design, pending user review and implementation plan
+Status: Approved; implementation plan ready
 
 ## 1. Objective
 
