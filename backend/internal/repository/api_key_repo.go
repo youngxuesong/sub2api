@@ -130,7 +130,7 @@ func createAPIKeyRouteTargets(ctx context.Context, client *dbent.Client, apiKeyI
 		builders = append(builders, client.APIKeyRouteFailoverTarget.Create().
 			SetAPIKeyID(apiKeyID).
 			SetTargetGroupID(groupID).
-			SetPriority(i+1))
+			SetPriority(int16(i+1)))
 	}
 	_, err := client.APIKeyRouteFailoverTarget.CreateBulk(builders...).Save(ctx)
 	return err
@@ -1077,7 +1077,7 @@ func apiKeyEntityToService(m *dbent.APIKey) *service.APIKey {
 				ID:            target.ID,
 				APIKeyID:      target.APIKeyID,
 				TargetGroupID: target.TargetGroupID,
-				Priority:      target.Priority,
+				Priority:      int(target.Priority),
 			}
 			if target.Edges.TargetGroup != nil {
 				mapped.Group = groupEntityToService(target.Edges.TargetGroup)

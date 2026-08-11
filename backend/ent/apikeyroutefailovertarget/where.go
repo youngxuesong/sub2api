@@ -76,7 +76,7 @@ func TargetGroupID(v int64) predicate.APIKeyRouteFailoverTarget {
 }
 
 // Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
-func Priority(v int) predicate.APIKeyRouteFailoverTarget {
+func Priority(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldEQ(FieldPriority, v))
 }
 
@@ -201,42 +201,42 @@ func TargetGroupIDNotIn(vs ...int64) predicate.APIKeyRouteFailoverTarget {
 }
 
 // PriorityEQ applies the EQ predicate on the "priority" field.
-func PriorityEQ(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityEQ(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldEQ(FieldPriority, v))
 }
 
 // PriorityNEQ applies the NEQ predicate on the "priority" field.
-func PriorityNEQ(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityNEQ(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldNEQ(FieldPriority, v))
 }
 
 // PriorityIn applies the In predicate on the "priority" field.
-func PriorityIn(vs ...int) predicate.APIKeyRouteFailoverTarget {
+func PriorityIn(vs ...int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldIn(FieldPriority, vs...))
 }
 
 // PriorityNotIn applies the NotIn predicate on the "priority" field.
-func PriorityNotIn(vs ...int) predicate.APIKeyRouteFailoverTarget {
+func PriorityNotIn(vs ...int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldNotIn(FieldPriority, vs...))
 }
 
 // PriorityGT applies the GT predicate on the "priority" field.
-func PriorityGT(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityGT(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldGT(FieldPriority, v))
 }
 
 // PriorityGTE applies the GTE predicate on the "priority" field.
-func PriorityGTE(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityGTE(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldGTE(FieldPriority, v))
 }
 
 // PriorityLT applies the LT predicate on the "priority" field.
-func PriorityLT(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityLT(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldLT(FieldPriority, v))
 }
 
 // PriorityLTE applies the LTE predicate on the "priority" field.
-func PriorityLTE(v int) predicate.APIKeyRouteFailoverTarget {
+func PriorityLTE(v int16) predicate.APIKeyRouteFailoverTarget {
 	return predicate.APIKeyRouteFailoverTarget(sql.FieldLTE(FieldPriority, v))
 }
 

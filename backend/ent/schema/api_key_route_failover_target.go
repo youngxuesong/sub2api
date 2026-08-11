@@ -32,7 +32,7 @@ func (APIKeyRouteFailoverTarget) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("api_key_id"),
 		field.Int64("target_group_id"),
-		field.Int("priority").Min(1).Max(5),
+		field.Int16("priority").Min(1).Max(5),
 	}
 }
 

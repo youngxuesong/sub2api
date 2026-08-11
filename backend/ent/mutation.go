@@ -2532,8 +2532,8 @@ type APIKeyRouteFailoverTargetMutation struct {
 	id                  *int64
 	created_at          *time.Time
 	updated_at          *time.Time
-	priority            *int
-	addpriority         *int
+	priority            *int16
+	addpriority         *int16
 	clearedFields       map[string]struct{}
 	api_key             *int64
 	clearedapi_key      bool
@@ -2787,13 +2787,13 @@ func (m *APIKeyRouteFailoverTargetMutation) ResetTargetGroupID() {
 }
 
 // SetPriority sets the "priority" field.
-func (m *APIKeyRouteFailoverTargetMutation) SetPriority(i int) {
+func (m *APIKeyRouteFailoverTargetMutation) SetPriority(i int16) {
 	m.priority = &i
 	m.addpriority = nil
 }
 
 // Priority returns the value of the "priority" field in the mutation.
-func (m *APIKeyRouteFailoverTargetMutation) Priority() (r int, exists bool) {
+func (m *APIKeyRouteFailoverTargetMutation) Priority() (r int16, exists bool) {
 	v := m.priority
 	if v == nil {
 		return
@@ -2804,7 +2804,7 @@ func (m *APIKeyRouteFailoverTargetMutation) Priority() (r int, exists bool) {
 // OldPriority returns the old "priority" field's value of the APIKeyRouteFailoverTarget entity.
 // If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *APIKeyRouteFailoverTargetMutation) OldPriority(ctx context.Context) (v int, err error) {
+func (m *APIKeyRouteFailoverTargetMutation) OldPriority(ctx context.Context) (v int16, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
 	}
@@ -2819,7 +2819,7 @@ func (m *APIKeyRouteFailoverTargetMutation) OldPriority(ctx context.Context) (v 
 }
 
 // AddPriority adds i to the "priority" field.
-func (m *APIKeyRouteFailoverTargetMutation) AddPriority(i int) {
+func (m *APIKeyRouteFailoverTargetMutation) AddPriority(i int16) {
 	if m.addpriority != nil {
 		*m.addpriority += i
 	} else {
@@ -2828,7 +2828,7 @@ func (m *APIKeyRouteFailoverTargetMutation) AddPriority(i int) {
 }
 
 // AddedPriority returns the value that was added to the "priority" field in this mutation.
-func (m *APIKeyRouteFailoverTargetMutation) AddedPriority() (r int, exists bool) {
+func (m *APIKeyRouteFailoverTargetMutation) AddedPriority() (r int16, exists bool) {
 	v := m.addpriority
 	if v == nil {
 		return
@@ -3021,7 +3021,7 @@ func (m *APIKeyRouteFailoverTargetMutation) SetField(name string, value ent.Valu
 		m.SetTargetGroupID(v)
 		return nil
 	case apikeyroutefailovertarget.FieldPriority:
-		v, ok := value.(int)
+		v, ok := value.(int16)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -3058,7 +3058,7 @@ func (m *APIKeyRouteFailoverTargetMutation) AddedField(name string) (ent.Value, 
 func (m *APIKeyRouteFailoverTargetMutation) AddField(name string, value ent.Value) error {
 	switch name {
 	case apikeyroutefailovertarget.FieldPriority:
-		v, ok := value.(int)
+		v, ok := value.(int16)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

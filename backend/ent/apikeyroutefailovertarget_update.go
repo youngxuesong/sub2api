@@ -65,14 +65,14 @@ func (_u *APIKeyRouteFailoverTargetUpdate) SetNillableTargetGroupID(v *int64) *A
 }
 
 // SetPriority sets the "priority" field.
-func (_u *APIKeyRouteFailoverTargetUpdate) SetPriority(v int) *APIKeyRouteFailoverTargetUpdate {
+func (_u *APIKeyRouteFailoverTargetUpdate) SetPriority(v int16) *APIKeyRouteFailoverTargetUpdate {
 	_u.mutation.ResetPriority()
 	_u.mutation.SetPriority(v)
 	return _u
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_u *APIKeyRouteFailoverTargetUpdate) SetNillablePriority(v *int) *APIKeyRouteFailoverTargetUpdate {
+func (_u *APIKeyRouteFailoverTargetUpdate) SetNillablePriority(v *int16) *APIKeyRouteFailoverTargetUpdate {
 	if v != nil {
 		_u.SetPriority(*v)
 	}
@@ -80,7 +80,7 @@ func (_u *APIKeyRouteFailoverTargetUpdate) SetNillablePriority(v *int) *APIKeyRo
 }
 
 // AddPriority adds value to the "priority" field.
-func (_u *APIKeyRouteFailoverTargetUpdate) AddPriority(v int) *APIKeyRouteFailoverTargetUpdate {
+func (_u *APIKeyRouteFailoverTargetUpdate) AddPriority(v int16) *APIKeyRouteFailoverTargetUpdate {
 	_u.mutation.AddPriority(v)
 	return _u
 }
@@ -180,10 +180,10 @@ func (_u *APIKeyRouteFailoverTargetUpdate) sqlSave(ctx context.Context) (_node i
 		_spec.SetField(apikeyroutefailovertarget.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.Priority(); ok {
-		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt, value)
+		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt16, value)
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
-		_spec.AddField(apikeyroutefailovertarget.FieldPriority, field.TypeInt, value)
+		_spec.AddField(apikeyroutefailovertarget.FieldPriority, field.TypeInt16, value)
 	}
 	if _u.mutation.APIKeyCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -298,14 +298,14 @@ func (_u *APIKeyRouteFailoverTargetUpdateOne) SetNillableTargetGroupID(v *int64)
 }
 
 // SetPriority sets the "priority" field.
-func (_u *APIKeyRouteFailoverTargetUpdateOne) SetPriority(v int) *APIKeyRouteFailoverTargetUpdateOne {
+func (_u *APIKeyRouteFailoverTargetUpdateOne) SetPriority(v int16) *APIKeyRouteFailoverTargetUpdateOne {
 	_u.mutation.ResetPriority()
 	_u.mutation.SetPriority(v)
 	return _u
 }
 
 // SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_u *APIKeyRouteFailoverTargetUpdateOne) SetNillablePriority(v *int) *APIKeyRouteFailoverTargetUpdateOne {
+func (_u *APIKeyRouteFailoverTargetUpdateOne) SetNillablePriority(v *int16) *APIKeyRouteFailoverTargetUpdateOne {
 	if v != nil {
 		_u.SetPriority(*v)
 	}
@@ -313,7 +313,7 @@ func (_u *APIKeyRouteFailoverTargetUpdateOne) SetNillablePriority(v *int) *APIKe
 }
 
 // AddPriority adds value to the "priority" field.
-func (_u *APIKeyRouteFailoverTargetUpdateOne) AddPriority(v int) *APIKeyRouteFailoverTargetUpdateOne {
+func (_u *APIKeyRouteFailoverTargetUpdateOne) AddPriority(v int16) *APIKeyRouteFailoverTargetUpdateOne {
 	_u.mutation.AddPriority(v)
 	return _u
 }
@@ -443,10 +443,10 @@ func (_u *APIKeyRouteFailoverTargetUpdateOne) sqlSave(ctx context.Context) (_nod
 		_spec.SetField(apikeyroutefailovertarget.FieldUpdatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.Priority(); ok {
-		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt, value)
+		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt16, value)
 	}
 	if value, ok := _u.mutation.AddedPriority(); ok {
-		_spec.AddField(apikeyroutefailovertarget.FieldPriority, field.TypeInt, value)
+		_spec.AddField(apikeyroutefailovertarget.FieldPriority, field.TypeInt16, value)
 	}
 	if _u.mutation.APIKeyCleared() {
 		edge := &sqlgraph.EdgeSpec{

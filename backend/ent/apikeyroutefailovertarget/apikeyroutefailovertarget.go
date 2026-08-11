@@ -74,7 +74,7 @@ var (
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
 	// PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
-	PriorityValidator func(int) error
+	PriorityValidator func(int16) error
 )
 
 // OrderOption defines the ordering options for the APIKeyRouteFailoverTarget queries.

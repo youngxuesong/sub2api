@@ -168,13 +168,13 @@ func init() {
 	// apikeyroutefailovertargetDescPriority is the schema descriptor for priority field.
 	apikeyroutefailovertargetDescPriority := apikeyroutefailovertargetFields[2].Descriptor()
 	// apikeyroutefailovertarget.PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
-	apikeyroutefailovertarget.PriorityValidator = func() func(int) error {
+	apikeyroutefailovertarget.PriorityValidator = func() func(int16) error {
 		validators := apikeyroutefailovertargetDescPriority.Validators
-		fns := [...]func(int) error{
-			validators[0].(func(int) error),
-			validators[1].(func(int) error),
+		fns := [...]func(int16) error{
+			validators[0].(func(int16) error),
+			validators[1].(func(int16) error),
 		}
-		return func(priority int) error {
+		return func(priority int16) error {
 			for _, fn := range fns {
 				if err := fn(priority); err != nil {
 					return err

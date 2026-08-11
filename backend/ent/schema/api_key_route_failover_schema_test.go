@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/field"
 )
 
 func fieldNames(fields []ent.Field) []string {
@@ -27,6 +28,8 @@ func TestAPIKeyRouteFailoverSchemaFields(t *testing.T) {
 		require.Contains(t, usageFields, name)
 	}
 
-	targetFields := fieldNames((schema.APIKeyRouteFailoverTarget{}).Fields())
+	targetSchemaFields := (schema.APIKeyRouteFailoverTarget{}).Fields()
+	targetFields := fieldNames(targetSchemaFields)
 	require.Equal(t, []string{"api_key_id", "target_group_id", "priority"}, targetFields)
+	require.Equal(t, field.TypeInt16, targetSchemaFields[2].Descriptor().Info.Type)
 }

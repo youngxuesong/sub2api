@@ -65,7 +65,7 @@ func (_c *APIKeyRouteFailoverTargetCreate) SetTargetGroupID(v int64) *APIKeyRout
 }
 
 // SetPriority sets the "priority" field.
-func (_c *APIKeyRouteFailoverTargetCreate) SetPriority(v int) *APIKeyRouteFailoverTargetCreate {
+func (_c *APIKeyRouteFailoverTargetCreate) SetPriority(v int16) *APIKeyRouteFailoverTargetCreate {
 	_c.mutation.SetPriority(v)
 	return _c
 }
@@ -189,7 +189,7 @@ func (_c *APIKeyRouteFailoverTargetCreate) createSpec() (*APIKeyRouteFailoverTar
 		_node.UpdatedAt = value
 	}
 	if value, ok := _c.mutation.Priority(); ok {
-		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt, value)
+		_spec.SetField(apikeyroutefailovertarget.FieldPriority, field.TypeInt16, value)
 		_node.Priority = value
 	}
 	if nodes := _c.mutation.APIKeyIDs(); len(nodes) > 0 {
@@ -315,7 +315,7 @@ func (u *APIKeyRouteFailoverTargetUpsert) UpdateTargetGroupID() *APIKeyRouteFail
 }
 
 // SetPriority sets the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsert) SetPriority(v int) *APIKeyRouteFailoverTargetUpsert {
+func (u *APIKeyRouteFailoverTargetUpsert) SetPriority(v int16) *APIKeyRouteFailoverTargetUpsert {
 	u.Set(apikeyroutefailovertarget.FieldPriority, v)
 	return u
 }
@@ -327,7 +327,7 @@ func (u *APIKeyRouteFailoverTargetUpsert) UpdatePriority() *APIKeyRouteFailoverT
 }
 
 // AddPriority adds v to the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsert) AddPriority(v int) *APIKeyRouteFailoverTargetUpsert {
+func (u *APIKeyRouteFailoverTargetUpsert) AddPriority(v int16) *APIKeyRouteFailoverTargetUpsert {
 	u.Add(apikeyroutefailovertarget.FieldPriority, v)
 	return u
 }
@@ -420,14 +420,14 @@ func (u *APIKeyRouteFailoverTargetUpsertOne) UpdateTargetGroupID() *APIKeyRouteF
 }
 
 // SetPriority sets the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsertOne) SetPriority(v int) *APIKeyRouteFailoverTargetUpsertOne {
+func (u *APIKeyRouteFailoverTargetUpsertOne) SetPriority(v int16) *APIKeyRouteFailoverTargetUpsertOne {
 	return u.Update(func(s *APIKeyRouteFailoverTargetUpsert) {
 		s.SetPriority(v)
 	})
 }
 
 // AddPriority adds v to the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsertOne) AddPriority(v int) *APIKeyRouteFailoverTargetUpsertOne {
+func (u *APIKeyRouteFailoverTargetUpsertOne) AddPriority(v int16) *APIKeyRouteFailoverTargetUpsertOne {
 	return u.Update(func(s *APIKeyRouteFailoverTargetUpsert) {
 		s.AddPriority(v)
 	})
@@ -694,14 +694,14 @@ func (u *APIKeyRouteFailoverTargetUpsertBulk) UpdateTargetGroupID() *APIKeyRoute
 }
 
 // SetPriority sets the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsertBulk) SetPriority(v int) *APIKeyRouteFailoverTargetUpsertBulk {
+func (u *APIKeyRouteFailoverTargetUpsertBulk) SetPriority(v int16) *APIKeyRouteFailoverTargetUpsertBulk {
 	return u.Update(func(s *APIKeyRouteFailoverTargetUpsert) {
 		s.SetPriority(v)
 	})
 }
 
 // AddPriority adds v to the "priority" field.
-func (u *APIKeyRouteFailoverTargetUpsertBulk) AddPriority(v int) *APIKeyRouteFailoverTargetUpsertBulk {
+func (u *APIKeyRouteFailoverTargetUpsertBulk) AddPriority(v int16) *APIKeyRouteFailoverTargetUpsertBulk {
 	return u.Update(func(s *APIKeyRouteFailoverTargetUpsert) {
 		s.AddPriority(v)
 	})

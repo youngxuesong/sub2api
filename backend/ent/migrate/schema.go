@@ -100,7 +100,7 @@ var (
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
 		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
-		{Name: "priority", Type: field.TypeInt},
+		{Name: "priority", Type: field.TypeInt16},
 		{Name: "api_key_id", Type: field.TypeInt64},
 		{Name: "target_group_id", Type: field.TypeInt64},
 	}

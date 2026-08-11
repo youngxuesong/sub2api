@@ -22,7 +22,3 @@ ALTER TABLE usage_logs
   ADD COLUMN IF NOT EXISTS route_attempt_count SMALLINT NOT NULL DEFAULT 1,
   ADD COLUMN IF NOT EXISTS route_fallback_reason VARCHAR(64) NULL,
   ADD COLUMN IF NOT EXISTS route_sticky_hit BOOLEAN NOT NULL DEFAULT FALSE;
-
-CREATE INDEX IF NOT EXISTS usage_logs_source_group_created_idx
-  ON usage_logs (source_group_id, created_at DESC)
-  WHERE source_group_id IS NOT NULL;

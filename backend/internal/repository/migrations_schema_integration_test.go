@@ -142,6 +142,14 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireIndex(t, tx, "api_key_route_failover_targets", "api_key_route_failover_targets_group_idx")
 	requireForeignKeyOnDelete(t, tx, "api_key_route_failover_targets", "api_key_id", "api_keys", "CASCADE")
 	requireForeignKeyOnDelete(t, tx, "api_key_route_failover_targets", "target_group_id", "groups", "CASCADE")
+	requireConstraintDefinitionContains(
+		t,
+		tx,
+		"api_key_route_failover_targets",
+		"api_key_route_failover_targets_priority_check",
+		"priority >= 1",
+		"priority <= 5",
+	)
 
 	var routeFailoverTargetCount int
 	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM api_key_route_failover_targets").Scan(&routeFailoverTargetCount))
@@ -169,7 +177,16 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "route_attempt_count", "smallint", 0, false)
 	requireColumn(t, tx, "usage_logs", "route_fallback_reason", "character varying", 64, true)
 	requireColumn(t, tx, "usage_logs", "route_sticky_hit", "boolean", 0, false)
-	requireIndex(t, tx, "usage_logs", "usage_logs_source_group_created_idx")
+	requireColumnDefaultEquals(t, tx, "usage_logs", "route_fallback_used", "false")
+	requireColumnDefaultEquals(t, tx, "usage_logs", "route_attempt_count", "1")
+	requireColumnDefaultEquals(t, tx, "usage_logs", "route_sticky_hit", "false")
+	requireIndexDefinitionEquals(
+		t,
+		tx,
+		"usage_logs",
+		"usage_logs_source_group_created_idx",
+		"CREATE INDEX usage_logs_source_group_created_idx ON public.usage_logs USING btree (source_group_id, created_at DESC) WHERE (source_group_id IS NOT NULL)",
+	)
 	requireIndex(t, tx, "usage_logs", usageLogsUpstreamModelMismatchIndex)
 
 	var mismatchIndexDef string
@@ -456,6 +473,40 @@ WHERE table_schema = 'public'
 	for _, fragment := range fragments {
 		require.Contains(t, columnDefault.String, fragment, "expected default for %s.%s to contain %q", table, column, fragment)
 	}
+}
+
+func requireColumnDefaultEquals(t *testing.T, tx *sql.Tx, table, column, expected string) {
+	t.Helper()
+
+	var columnDefault sql.NullString
+	err := tx.QueryRowContext(context.Background(), `
+SELECT column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = $1
+  AND column_name = $2
+`, table, column).Scan(&columnDefault)
+	require.NoError(t, err, "query column_default for %s.%s", table, column)
+	require.True(t, columnDefault.Valid, "expected column_default for %s.%s", table, column)
+	require.Equal(t, expected, columnDefault.String, "unexpected default for %s.%s", table, column)
+}
+
+func requireIndexDefinitionEquals(t *testing.T, tx *sql.Tx, table, index, expected string) {
+	t.Helper()
+
+	var definition string
+	err := tx.QueryRowContext(context.Background(), `
+SELECT pg_get_indexdef(i.indexrelid)
+FROM pg_class idx
+JOIN pg_index i ON i.indexrelid = idx.oid
+JOIN pg_class tbl ON tbl.oid = i.indrelid
+JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+WHERE ns.nspname = 'public'
+  AND tbl.relname = $1
+  AND idx.relname = $2
+`, table, index).Scan(&definition)
+	require.NoError(t, err, "query index definition for %s.%s", table, index)
+	require.Equal(t, expected, definition, "unexpected index definition for %s.%s", table, index)
 }
 
 func requireColumn(t *testing.T, tx *sql.Tx, table, column, dataType string, maxLen int, nullable bool) {

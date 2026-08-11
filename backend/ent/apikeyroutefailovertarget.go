@@ -28,7 +28,7 @@ type APIKeyRouteFailoverTarget struct {
 	// TargetGroupID holds the value of the "target_group_id" field.
 	TargetGroupID int64 `json:"target_group_id,omitempty"`
 	// Priority holds the value of the "priority" field.
-	Priority int `json:"priority,omitempty"`
+	Priority int16 `json:"priority,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the APIKeyRouteFailoverTargetQuery when eager-loading is set.
 	Edges        APIKeyRouteFailoverTargetEdges `json:"edges"`
@@ -126,7 +126,7 @@ func (_m *APIKeyRouteFailoverTarget) assignValues(columns []string, values []any
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field priority", values[i])
 			} else if value.Valid {
-				_m.Priority = int(value.Int64)
+				_m.Priority = int16(value.Int64)
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
