@@ -125,6 +125,31 @@ func GroupID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldGroupID, v))
 }
 
+// SourceGroupID applies equality check predicate on the "source_group_id" field. It's identical to SourceGroupIDEQ.
+func SourceGroupID(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSourceGroupID, v))
+}
+
+// RouteFallbackUsed applies equality check predicate on the "route_fallback_used" field. It's identical to RouteFallbackUsedEQ.
+func RouteFallbackUsed(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteFallbackUsed, v))
+}
+
+// RouteAttemptCount applies equality check predicate on the "route_attempt_count" field. It's identical to RouteAttemptCountEQ.
+func RouteAttemptCount(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteAttemptCount, v))
+}
+
+// RouteFallbackReason applies equality check predicate on the "route_fallback_reason" field. It's identical to RouteFallbackReasonEQ.
+func RouteFallbackReason(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteFallbackReason, v))
+}
+
+// RouteStickyHit applies equality check predicate on the "route_sticky_hit" field. It's identical to RouteStickyHitEQ.
+func RouteStickyHit(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteStickyHit, v))
+}
+
 // SubscriptionID applies equality check predicate on the "subscription_id" field. It's identical to SubscriptionIDEQ.
 func SubscriptionID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldSubscriptionID, v))
@@ -1023,6 +1048,191 @@ func GroupIDIsNil() predicate.UsageLog {
 // GroupIDNotNil applies the NotNil predicate on the "group_id" field.
 func GroupIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldGroupID))
+}
+
+// SourceGroupIDEQ applies the EQ predicate on the "source_group_id" field.
+func SourceGroupIDEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDNEQ applies the NEQ predicate on the "source_group_id" field.
+func SourceGroupIDNEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDIn applies the In predicate on the "source_group_id" field.
+func SourceGroupIDIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldSourceGroupID, vs...))
+}
+
+// SourceGroupIDNotIn applies the NotIn predicate on the "source_group_id" field.
+func SourceGroupIDNotIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldSourceGroupID, vs...))
+}
+
+// SourceGroupIDGT applies the GT predicate on the "source_group_id" field.
+func SourceGroupIDGT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDGTE applies the GTE predicate on the "source_group_id" field.
+func SourceGroupIDGTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDLT applies the LT predicate on the "source_group_id" field.
+func SourceGroupIDLT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDLTE applies the LTE predicate on the "source_group_id" field.
+func SourceGroupIDLTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldSourceGroupID, v))
+}
+
+// SourceGroupIDIsNil applies the IsNil predicate on the "source_group_id" field.
+func SourceGroupIDIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldSourceGroupID))
+}
+
+// SourceGroupIDNotNil applies the NotNil predicate on the "source_group_id" field.
+func SourceGroupIDNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldSourceGroupID))
+}
+
+// RouteFallbackUsedEQ applies the EQ predicate on the "route_fallback_used" field.
+func RouteFallbackUsedEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteFallbackUsed, v))
+}
+
+// RouteFallbackUsedNEQ applies the NEQ predicate on the "route_fallback_used" field.
+func RouteFallbackUsedNEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldRouteFallbackUsed, v))
+}
+
+// RouteAttemptCountEQ applies the EQ predicate on the "route_attempt_count" field.
+func RouteAttemptCountEQ(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteAttemptCount, v))
+}
+
+// RouteAttemptCountNEQ applies the NEQ predicate on the "route_attempt_count" field.
+func RouteAttemptCountNEQ(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldRouteAttemptCount, v))
+}
+
+// RouteAttemptCountIn applies the In predicate on the "route_attempt_count" field.
+func RouteAttemptCountIn(vs ...int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldRouteAttemptCount, vs...))
+}
+
+// RouteAttemptCountNotIn applies the NotIn predicate on the "route_attempt_count" field.
+func RouteAttemptCountNotIn(vs ...int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldRouteAttemptCount, vs...))
+}
+
+// RouteAttemptCountGT applies the GT predicate on the "route_attempt_count" field.
+func RouteAttemptCountGT(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldRouteAttemptCount, v))
+}
+
+// RouteAttemptCountGTE applies the GTE predicate on the "route_attempt_count" field.
+func RouteAttemptCountGTE(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldRouteAttemptCount, v))
+}
+
+// RouteAttemptCountLT applies the LT predicate on the "route_attempt_count" field.
+func RouteAttemptCountLT(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldRouteAttemptCount, v))
+}
+
+// RouteAttemptCountLTE applies the LTE predicate on the "route_attempt_count" field.
+func RouteAttemptCountLTE(v int16) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldRouteAttemptCount, v))
+}
+
+// RouteFallbackReasonEQ applies the EQ predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonEQ(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonNEQ applies the NEQ predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonNEQ(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonIn applies the In predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonIn(vs ...string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldRouteFallbackReason, vs...))
+}
+
+// RouteFallbackReasonNotIn applies the NotIn predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonNotIn(vs ...string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldRouteFallbackReason, vs...))
+}
+
+// RouteFallbackReasonGT applies the GT predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonGT(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonGTE applies the GTE predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonGTE(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonLT applies the LT predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonLT(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonLTE applies the LTE predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonLTE(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonContains applies the Contains predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonContains(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldContains(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonHasPrefix applies the HasPrefix predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonHasPrefix(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldHasPrefix(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonHasSuffix applies the HasSuffix predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonHasSuffix(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldHasSuffix(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonIsNil applies the IsNil predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldRouteFallbackReason))
+}
+
+// RouteFallbackReasonNotNil applies the NotNil predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldRouteFallbackReason))
+}
+
+// RouteFallbackReasonEqualFold applies the EqualFold predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonEqualFold(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEqualFold(FieldRouteFallbackReason, v))
+}
+
+// RouteFallbackReasonContainsFold applies the ContainsFold predicate on the "route_fallback_reason" field.
+func RouteFallbackReasonContainsFold(v string) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldContainsFold(FieldRouteFallbackReason, v))
+}
+
+// RouteStickyHitEQ applies the EQ predicate on the "route_sticky_hit" field.
+func RouteStickyHitEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldRouteStickyHit, v))
+}
+
+// RouteStickyHitNEQ applies the NEQ predicate on the "route_sticky_hit" field.
+func RouteStickyHitNEQ(v bool) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldRouteStickyHit, v))
 }
 
 // SubscriptionIDEQ applies the EQ predicate on the "subscription_id" field.

@@ -21,6 +21,18 @@ func (f APIKeyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.APIKeyMutation", m)
 }
 
+// The APIKeyRouteFailoverTargetFunc type is an adapter to allow the use of ordinary
+// function as APIKeyRouteFailoverTarget mutator.
+type APIKeyRouteFailoverTargetFunc func(context.Context, *ent.APIKeyRouteFailoverTargetMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f APIKeyRouteFailoverTargetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.APIKeyRouteFailoverTargetMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.APIKeyRouteFailoverTargetMutation", m)
+}
+
 // The AccountFunc type is an adapter to allow the use of ordinary
 // function as Account mutator.
 type AccountFunc func(context.Context, *ent.AccountMutation) (ent.Value, error)

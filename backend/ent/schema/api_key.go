@@ -47,6 +47,11 @@ func (APIKey) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default(domain.StatusActive),
+		field.Int64("route_config_version").
+			Default(1),
+		field.Time("failover_risk_acknowledged_at").
+			Optional().
+			Nillable(),
 		field.Time("last_used_at").
 			Optional().
 			Nillable().
@@ -130,6 +135,8 @@ func (APIKey) Edges() []ent.Edge {
 			Field("group_id").
 			Unique(),
 		edge.To("usage_logs", UsageLog.Type),
+		edge.To("route_failover_targets", APIKeyRouteFailoverTarget.Type).
+			Annotations(entsql.OnDelete(entsql.Cascade)),
 	}
 }
 

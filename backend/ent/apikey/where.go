@@ -95,6 +95,16 @@ func Status(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldStatus, v))
 }
 
+// RouteConfigVersion applies equality check predicate on the "route_config_version" field. It's identical to RouteConfigVersionEQ.
+func RouteConfigVersion(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldRouteConfigVersion, v))
+}
+
+// FailoverRiskAcknowledgedAt applies equality check predicate on the "failover_risk_acknowledged_at" field. It's identical to FailoverRiskAcknowledgedAtEQ.
+func FailoverRiskAcknowledgedAt(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldFailoverRiskAcknowledgedAt, v))
+}
+
 // LastUsedAt applies equality check predicate on the "last_used_at" field. It's identical to LastUsedAtEQ.
 func LastUsedAt(v time.Time) predicate.APIKey {
 	return predicate.APIKey(sql.FieldEQ(FieldLastUsedAt, v))
@@ -533,6 +543,96 @@ func StatusEqualFold(v string) predicate.APIKey {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.APIKey {
 	return predicate.APIKey(sql.FieldContainsFold(FieldStatus, v))
+}
+
+// RouteConfigVersionEQ applies the EQ predicate on the "route_config_version" field.
+func RouteConfigVersionEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldRouteConfigVersion, v))
+}
+
+// RouteConfigVersionNEQ applies the NEQ predicate on the "route_config_version" field.
+func RouteConfigVersionNEQ(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldRouteConfigVersion, v))
+}
+
+// RouteConfigVersionIn applies the In predicate on the "route_config_version" field.
+func RouteConfigVersionIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldRouteConfigVersion, vs...))
+}
+
+// RouteConfigVersionNotIn applies the NotIn predicate on the "route_config_version" field.
+func RouteConfigVersionNotIn(vs ...int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldRouteConfigVersion, vs...))
+}
+
+// RouteConfigVersionGT applies the GT predicate on the "route_config_version" field.
+func RouteConfigVersionGT(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldRouteConfigVersion, v))
+}
+
+// RouteConfigVersionGTE applies the GTE predicate on the "route_config_version" field.
+func RouteConfigVersionGTE(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldRouteConfigVersion, v))
+}
+
+// RouteConfigVersionLT applies the LT predicate on the "route_config_version" field.
+func RouteConfigVersionLT(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldRouteConfigVersion, v))
+}
+
+// RouteConfigVersionLTE applies the LTE predicate on the "route_config_version" field.
+func RouteConfigVersionLTE(v int64) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldRouteConfigVersion, v))
+}
+
+// FailoverRiskAcknowledgedAtEQ applies the EQ predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldEQ(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtNEQ applies the NEQ predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtNEQ(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNEQ(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtIn applies the In predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldIn(FieldFailoverRiskAcknowledgedAt, vs...))
+}
+
+// FailoverRiskAcknowledgedAtNotIn applies the NotIn predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtNotIn(vs ...time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotIn(FieldFailoverRiskAcknowledgedAt, vs...))
+}
+
+// FailoverRiskAcknowledgedAtGT applies the GT predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtGT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGT(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtGTE applies the GTE predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtGTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldGTE(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtLT applies the LT predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtLT(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLT(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtLTE applies the LTE predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtLTE(v time.Time) predicate.APIKey {
+	return predicate.APIKey(sql.FieldLTE(FieldFailoverRiskAcknowledgedAt, v))
+}
+
+// FailoverRiskAcknowledgedAtIsNil applies the IsNil predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtIsNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldIsNull(FieldFailoverRiskAcknowledgedAt))
+}
+
+// FailoverRiskAcknowledgedAtNotNil applies the NotNil predicate on the "failover_risk_acknowledged_at" field.
+func FailoverRiskAcknowledgedAtNotNil() predicate.APIKey {
+	return predicate.APIKey(sql.FieldNotNull(FieldFailoverRiskAcknowledgedAt))
 }
 
 // LastUsedAtEQ applies the EQ predicate on the "last_used_at" field.
@@ -1186,6 +1286,29 @@ func HasUsageLogs() predicate.APIKey {
 func HasUsageLogsWith(preds ...predicate.UsageLog) predicate.APIKey {
 	return predicate.APIKey(func(s *sql.Selector) {
 		step := newUsageLogsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasRouteFailoverTargets applies the HasEdge predicate on the "route_failover_targets" edge.
+func HasRouteFailoverTargets() predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, RouteFailoverTargetsTable, RouteFailoverTargetsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasRouteFailoverTargetsWith applies the HasEdge predicate on the "route_failover_targets" edge with a given conditions (other predicates).
+func HasRouteFailoverTargetsWith(preds ...predicate.APIKeyRouteFailoverTarget) predicate.APIKey {
+	return predicate.APIKey(func(s *sql.Selector) {
+		step := newRouteFailoverTargetsStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)

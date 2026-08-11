@@ -42,6 +42,16 @@ const (
 	FieldBillingMode = "billing_mode"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldSourceGroupID holds the string denoting the source_group_id field in the database.
+	FieldSourceGroupID = "source_group_id"
+	// FieldRouteFallbackUsed holds the string denoting the route_fallback_used field in the database.
+	FieldRouteFallbackUsed = "route_fallback_used"
+	// FieldRouteAttemptCount holds the string denoting the route_attempt_count field in the database.
+	FieldRouteAttemptCount = "route_attempt_count"
+	// FieldRouteFallbackReason holds the string denoting the route_fallback_reason field in the database.
+	FieldRouteFallbackReason = "route_fallback_reason"
+	// FieldRouteStickyHit holds the string denoting the route_sticky_hit field in the database.
+	FieldRouteStickyHit = "route_sticky_hit"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
@@ -174,6 +184,11 @@ var Columns = []string{
 	FieldBillingTier,
 	FieldBillingMode,
 	FieldGroupID,
+	FieldSourceGroupID,
+	FieldRouteFallbackUsed,
+	FieldRouteAttemptCount,
+	FieldRouteFallbackReason,
+	FieldRouteStickyHit,
 	FieldSubscriptionID,
 	FieldInputTokens,
 	FieldOutputTokens,
@@ -236,6 +251,14 @@ var (
 	BillingTierValidator func(string) error
 	// BillingModeValidator is a validator for the "billing_mode" field. It is called by the builders before save.
 	BillingModeValidator func(string) error
+	// DefaultRouteFallbackUsed holds the default value on creation for the "route_fallback_used" field.
+	DefaultRouteFallbackUsed bool
+	// DefaultRouteAttemptCount holds the default value on creation for the "route_attempt_count" field.
+	DefaultRouteAttemptCount int16
+	// RouteFallbackReasonValidator is a validator for the "route_fallback_reason" field. It is called by the builders before save.
+	RouteFallbackReasonValidator func(string) error
+	// DefaultRouteStickyHit holds the default value on creation for the "route_sticky_hit" field.
+	DefaultRouteStickyHit bool
 	// DefaultInputTokens holds the default value on creation for the "input_tokens" field.
 	DefaultInputTokens int
 	// DefaultOutputTokens holds the default value on creation for the "output_tokens" field.
@@ -368,6 +391,31 @@ func ByBillingMode(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
+}
+
+// BySourceGroupID orders the results by the source_group_id field.
+func BySourceGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceGroupID, opts...).ToFunc()
+}
+
+// ByRouteFallbackUsed orders the results by the route_fallback_used field.
+func ByRouteFallbackUsed(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteFallbackUsed, opts...).ToFunc()
+}
+
+// ByRouteAttemptCount orders the results by the route_attempt_count field.
+func ByRouteAttemptCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteAttemptCount, opts...).ToFunc()
+}
+
+// ByRouteFallbackReason orders the results by the route_fallback_reason field.
+func ByRouteFallbackReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteFallbackReason, opts...).ToFunc()
+}
+
+// ByRouteStickyHit orders the results by the route_sticky_hit field.
+func ByRouteStickyHit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteStickyHit, opts...).ToFunc()
 }
 
 // BySubscriptionID orders the results by the subscription_id field.

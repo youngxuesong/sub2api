@@ -31,6 +31,10 @@ const (
 	FieldGroupID = "group_id"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
+	// FieldRouteConfigVersion holds the string denoting the route_config_version field in the database.
+	FieldRouteConfigVersion = "route_config_version"
+	// FieldFailoverRiskAcknowledgedAt holds the string denoting the failover_risk_acknowledged_at field in the database.
+	FieldFailoverRiskAcknowledgedAt = "failover_risk_acknowledged_at"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
 	FieldLastUsedAt = "last_used_at"
 	// FieldIPWhitelist holds the string denoting the ip_whitelist field in the database.
@@ -67,6 +71,8 @@ const (
 	EdgeGroup = "group"
 	// EdgeUsageLogs holds the string denoting the usage_logs edge name in mutations.
 	EdgeUsageLogs = "usage_logs"
+	// EdgeRouteFailoverTargets holds the string denoting the route_failover_targets edge name in mutations.
+	EdgeRouteFailoverTargets = "route_failover_targets"
 	// Table holds the table name of the apikey in the database.
 	Table = "api_keys"
 	// UserTable is the table that holds the user relation/edge.
@@ -90,6 +96,13 @@ const (
 	UsageLogsInverseTable = "usage_logs"
 	// UsageLogsColumn is the table column denoting the usage_logs relation/edge.
 	UsageLogsColumn = "api_key_id"
+	// RouteFailoverTargetsTable is the table that holds the route_failover_targets relation/edge.
+	RouteFailoverTargetsTable = "api_key_route_failover_targets"
+	// RouteFailoverTargetsInverseTable is the table name for the APIKeyRouteFailoverTarget entity.
+	// It exists in this package in order to avoid circular dependency with the "apikeyroutefailovertarget" package.
+	RouteFailoverTargetsInverseTable = "api_key_route_failover_targets"
+	// RouteFailoverTargetsColumn is the table column denoting the route_failover_targets relation/edge.
+	RouteFailoverTargetsColumn = "api_key_id"
 )
 
 // Columns holds all SQL columns for apikey fields.
@@ -103,6 +116,8 @@ var Columns = []string{
 	FieldName,
 	FieldGroupID,
 	FieldStatus,
+	FieldRouteConfigVersion,
+	FieldFailoverRiskAcknowledgedAt,
 	FieldLastUsedAt,
 	FieldIPWhitelist,
 	FieldIPBlacklist,
@@ -152,6 +167,8 @@ var (
 	DefaultStatus string
 	// StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	StatusValidator func(string) error
+	// DefaultRouteConfigVersion holds the default value on creation for the "route_config_version" field.
+	DefaultRouteConfigVersion int64
 	// DefaultQuota holds the default value on creation for the "quota" field.
 	DefaultQuota float64
 	// DefaultQuotaUsed holds the default value on creation for the "quota_used" field.
@@ -216,6 +233,16 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
+}
+
+// ByRouteConfigVersion orders the results by the route_config_version field.
+func ByRouteConfigVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRouteConfigVersion, opts...).ToFunc()
+}
+
+// ByFailoverRiskAcknowledgedAt orders the results by the failover_risk_acknowledged_at field.
+func ByFailoverRiskAcknowledgedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFailoverRiskAcknowledgedAt, opts...).ToFunc()
 }
 
 // ByLastUsedAt orders the results by the last_used_at field.
@@ -310,6 +337,20 @@ func ByUsageLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newUsageLogsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByRouteFailoverTargetsCount orders the results by route_failover_targets count.
+func ByRouteFailoverTargetsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRouteFailoverTargetsStep(), opts...)
+	}
+}
+
+// ByRouteFailoverTargets orders the results by route_failover_targets terms.
+func ByRouteFailoverTargets(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRouteFailoverTargetsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newUserStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -329,5 +370,12 @@ func newUsageLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(UsageLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, UsageLogsTable, UsageLogsColumn),
+	)
+}
+func newRouteFailoverTargetsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RouteFailoverTargetsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, RouteFailoverTargetsTable, RouteFailoverTargetsColumn),
 	)
 }

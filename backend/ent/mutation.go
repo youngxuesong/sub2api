@@ -17,6 +17,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/apikeyroutefailovertarget"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
 	"github.com/Wei-Shaw/sub2api/ent/authidentitychannel"
 	"github.com/Wei-Shaw/sub2api/ent/batchimageevent"
@@ -65,6 +66,7 @@ const (
 
 	// Node types.
 	TypeAPIKey                        = "APIKey"
+	TypeAPIKeyRouteFailoverTarget     = "APIKeyRouteFailoverTarget"
 	TypeAccount                       = "Account"
 	TypeAccountGroup                  = "AccountGroup"
 	TypeAnnouncement                  = "Announcement"
@@ -108,51 +110,57 @@ const (
 // APIKeyMutation represents an operation that mutates the APIKey nodes in the graph.
 type APIKeyMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *int64
-	created_at         *time.Time
-	updated_at         *time.Time
-	deleted_at         *time.Time
-	key                *string
-	name               *string
-	status             *string
-	last_used_at       *time.Time
-	ip_whitelist       *[]string
-	appendip_whitelist []string
-	ip_blacklist       *[]string
-	appendip_blacklist []string
-	quota              *float64
-	addquota           *float64
-	quota_used         *float64
-	addquota_used      *float64
-	expires_at         *time.Time
-	rate_limit_5h      *float64
-	addrate_limit_5h   *float64
-	rate_limit_1d      *float64
-	addrate_limit_1d   *float64
-	rate_limit_7d      *float64
-	addrate_limit_7d   *float64
-	usage_5h           *float64
-	addusage_5h        *float64
-	usage_1d           *float64
-	addusage_1d        *float64
-	usage_7d           *float64
-	addusage_7d        *float64
-	window_5h_start    *time.Time
-	window_1d_start    *time.Time
-	window_7d_start    *time.Time
-	clearedFields      map[string]struct{}
-	user               *int64
-	cleareduser        bool
-	group              *int64
-	clearedgroup       bool
-	usage_logs         map[int64]struct{}
-	removedusage_logs  map[int64]struct{}
-	clearedusage_logs  bool
-	done               bool
-	oldValue           func(context.Context) (*APIKey, error)
-	predicates         []predicate.APIKey
+	op                            Op
+	typ                           string
+	id                            *int64
+	created_at                    *time.Time
+	updated_at                    *time.Time
+	deleted_at                    *time.Time
+	key                           *string
+	name                          *string
+	status                        *string
+	route_config_version          *int64
+	addroute_config_version       *int64
+	failover_risk_acknowledged_at *time.Time
+	last_used_at                  *time.Time
+	ip_whitelist                  *[]string
+	appendip_whitelist            []string
+	ip_blacklist                  *[]string
+	appendip_blacklist            []string
+	quota                         *float64
+	addquota                      *float64
+	quota_used                    *float64
+	addquota_used                 *float64
+	expires_at                    *time.Time
+	rate_limit_5h                 *float64
+	addrate_limit_5h              *float64
+	rate_limit_1d                 *float64
+	addrate_limit_1d              *float64
+	rate_limit_7d                 *float64
+	addrate_limit_7d              *float64
+	usage_5h                      *float64
+	addusage_5h                   *float64
+	usage_1d                      *float64
+	addusage_1d                   *float64
+	usage_7d                      *float64
+	addusage_7d                   *float64
+	window_5h_start               *time.Time
+	window_1d_start               *time.Time
+	window_7d_start               *time.Time
+	clearedFields                 map[string]struct{}
+	user                          *int64
+	cleareduser                   bool
+	group                         *int64
+	clearedgroup                  bool
+	usage_logs                    map[int64]struct{}
+	removedusage_logs             map[int64]struct{}
+	clearedusage_logs             bool
+	route_failover_targets        map[int64]struct{}
+	removedroute_failover_targets map[int64]struct{}
+	clearedroute_failover_targets bool
+	done                          bool
+	oldValue                      func(context.Context) (*APIKey, error)
+	predicates                    []predicate.APIKey
 }
 
 var _ ent.Mutation = (*APIKeyMutation)(nil)
@@ -565,6 +573,111 @@ func (m *APIKeyMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *APIKeyMutation) ResetStatus() {
 	m.status = nil
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (m *APIKeyMutation) SetRouteConfigVersion(i int64) {
+	m.route_config_version = &i
+	m.addroute_config_version = nil
+}
+
+// RouteConfigVersion returns the value of the "route_config_version" field in the mutation.
+func (m *APIKeyMutation) RouteConfigVersion() (r int64, exists bool) {
+	v := m.route_config_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteConfigVersion returns the old "route_config_version" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldRouteConfigVersion(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteConfigVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteConfigVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteConfigVersion: %w", err)
+	}
+	return oldValue.RouteConfigVersion, nil
+}
+
+// AddRouteConfigVersion adds i to the "route_config_version" field.
+func (m *APIKeyMutation) AddRouteConfigVersion(i int64) {
+	if m.addroute_config_version != nil {
+		*m.addroute_config_version += i
+	} else {
+		m.addroute_config_version = &i
+	}
+}
+
+// AddedRouteConfigVersion returns the value that was added to the "route_config_version" field in this mutation.
+func (m *APIKeyMutation) AddedRouteConfigVersion() (r int64, exists bool) {
+	v := m.addroute_config_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRouteConfigVersion resets all changes to the "route_config_version" field.
+func (m *APIKeyMutation) ResetRouteConfigVersion() {
+	m.route_config_version = nil
+	m.addroute_config_version = nil
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (m *APIKeyMutation) SetFailoverRiskAcknowledgedAt(t time.Time) {
+	m.failover_risk_acknowledged_at = &t
+}
+
+// FailoverRiskAcknowledgedAt returns the value of the "failover_risk_acknowledged_at" field in the mutation.
+func (m *APIKeyMutation) FailoverRiskAcknowledgedAt() (r time.Time, exists bool) {
+	v := m.failover_risk_acknowledged_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFailoverRiskAcknowledgedAt returns the old "failover_risk_acknowledged_at" field's value of the APIKey entity.
+// If the APIKey object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyMutation) OldFailoverRiskAcknowledgedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFailoverRiskAcknowledgedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFailoverRiskAcknowledgedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFailoverRiskAcknowledgedAt: %w", err)
+	}
+	return oldValue.FailoverRiskAcknowledgedAt, nil
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (m *APIKeyMutation) ClearFailoverRiskAcknowledgedAt() {
+	m.failover_risk_acknowledged_at = nil
+	m.clearedFields[apikey.FieldFailoverRiskAcknowledgedAt] = struct{}{}
+}
+
+// FailoverRiskAcknowledgedAtCleared returns if the "failover_risk_acknowledged_at" field was cleared in this mutation.
+func (m *APIKeyMutation) FailoverRiskAcknowledgedAtCleared() bool {
+	_, ok := m.clearedFields[apikey.FieldFailoverRiskAcknowledgedAt]
+	return ok
+}
+
+// ResetFailoverRiskAcknowledgedAt resets all changes to the "failover_risk_acknowledged_at" field.
+func (m *APIKeyMutation) ResetFailoverRiskAcknowledgedAt() {
+	m.failover_risk_acknowledged_at = nil
+	delete(m.clearedFields, apikey.FieldFailoverRiskAcknowledgedAt)
 }
 
 // SetLastUsedAt sets the "last_used_at" field.
@@ -1498,6 +1611,60 @@ func (m *APIKeyMutation) ResetUsageLogs() {
 	m.removedusage_logs = nil
 }
 
+// AddRouteFailoverTargetIDs adds the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity by ids.
+func (m *APIKeyMutation) AddRouteFailoverTargetIDs(ids ...int64) {
+	if m.route_failover_targets == nil {
+		m.route_failover_targets = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.route_failover_targets[ids[i]] = struct{}{}
+	}
+}
+
+// ClearRouteFailoverTargets clears the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity.
+func (m *APIKeyMutation) ClearRouteFailoverTargets() {
+	m.clearedroute_failover_targets = true
+}
+
+// RouteFailoverTargetsCleared reports if the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity was cleared.
+func (m *APIKeyMutation) RouteFailoverTargetsCleared() bool {
+	return m.clearedroute_failover_targets
+}
+
+// RemoveRouteFailoverTargetIDs removes the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity by IDs.
+func (m *APIKeyMutation) RemoveRouteFailoverTargetIDs(ids ...int64) {
+	if m.removedroute_failover_targets == nil {
+		m.removedroute_failover_targets = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.route_failover_targets, ids[i])
+		m.removedroute_failover_targets[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedRouteFailoverTargets returns the removed IDs of the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity.
+func (m *APIKeyMutation) RemovedRouteFailoverTargetsIDs() (ids []int64) {
+	for id := range m.removedroute_failover_targets {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// RouteFailoverTargetsIDs returns the "route_failover_targets" edge IDs in the mutation.
+func (m *APIKeyMutation) RouteFailoverTargetsIDs() (ids []int64) {
+	for id := range m.route_failover_targets {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetRouteFailoverTargets resets all changes to the "route_failover_targets" edge.
+func (m *APIKeyMutation) ResetRouteFailoverTargets() {
+	m.route_failover_targets = nil
+	m.clearedroute_failover_targets = false
+	m.removedroute_failover_targets = nil
+}
+
 // Where appends a list predicates to the APIKeyMutation builder.
 func (m *APIKeyMutation) Where(ps ...predicate.APIKey) {
 	m.predicates = append(m.predicates, ps...)
@@ -1532,7 +1699,7 @@ func (m *APIKeyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *APIKeyMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.created_at != nil {
 		fields = append(fields, apikey.FieldCreatedAt)
 	}
@@ -1556,6 +1723,12 @@ func (m *APIKeyMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, apikey.FieldStatus)
+	}
+	if m.route_config_version != nil {
+		fields = append(fields, apikey.FieldRouteConfigVersion)
+	}
+	if m.failover_risk_acknowledged_at != nil {
+		fields = append(fields, apikey.FieldFailoverRiskAcknowledgedAt)
 	}
 	if m.last_used_at != nil {
 		fields = append(fields, apikey.FieldLastUsedAt)
@@ -1626,6 +1799,10 @@ func (m *APIKeyMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case apikey.FieldStatus:
 		return m.Status()
+	case apikey.FieldRouteConfigVersion:
+		return m.RouteConfigVersion()
+	case apikey.FieldFailoverRiskAcknowledgedAt:
+		return m.FailoverRiskAcknowledgedAt()
 	case apikey.FieldLastUsedAt:
 		return m.LastUsedAt()
 	case apikey.FieldIPWhitelist:
@@ -1681,6 +1858,10 @@ func (m *APIKeyMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldGroupID(ctx)
 	case apikey.FieldStatus:
 		return m.OldStatus(ctx)
+	case apikey.FieldRouteConfigVersion:
+		return m.OldRouteConfigVersion(ctx)
+	case apikey.FieldFailoverRiskAcknowledgedAt:
+		return m.OldFailoverRiskAcknowledgedAt(ctx)
 	case apikey.FieldLastUsedAt:
 		return m.OldLastUsedAt(ctx)
 	case apikey.FieldIPWhitelist:
@@ -1775,6 +1956,20 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case apikey.FieldRouteConfigVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteConfigVersion(v)
+		return nil
+	case apikey.FieldFailoverRiskAcknowledgedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFailoverRiskAcknowledgedAt(v)
 		return nil
 	case apikey.FieldLastUsedAt:
 		v, ok := value.(time.Time)
@@ -1889,6 +2084,9 @@ func (m *APIKeyMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *APIKeyMutation) AddedFields() []string {
 	var fields []string
+	if m.addroute_config_version != nil {
+		fields = append(fields, apikey.FieldRouteConfigVersion)
+	}
 	if m.addquota != nil {
 		fields = append(fields, apikey.FieldQuota)
 	}
@@ -1921,6 +2119,8 @@ func (m *APIKeyMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case apikey.FieldRouteConfigVersion:
+		return m.AddedRouteConfigVersion()
 	case apikey.FieldQuota:
 		return m.AddedQuota()
 	case apikey.FieldQuotaUsed:
@@ -1946,6 +2146,13 @@ func (m *APIKeyMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *APIKeyMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case apikey.FieldRouteConfigVersion:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRouteConfigVersion(v)
+		return nil
 	case apikey.FieldQuota:
 		v, ok := value.(float64)
 		if !ok {
@@ -2016,6 +2223,9 @@ func (m *APIKeyMutation) ClearedFields() []string {
 	if m.FieldCleared(apikey.FieldGroupID) {
 		fields = append(fields, apikey.FieldGroupID)
 	}
+	if m.FieldCleared(apikey.FieldFailoverRiskAcknowledgedAt) {
+		fields = append(fields, apikey.FieldFailoverRiskAcknowledgedAt)
+	}
 	if m.FieldCleared(apikey.FieldLastUsedAt) {
 		fields = append(fields, apikey.FieldLastUsedAt)
 	}
@@ -2056,6 +2266,9 @@ func (m *APIKeyMutation) ClearField(name string) error {
 		return nil
 	case apikey.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case apikey.FieldFailoverRiskAcknowledgedAt:
+		m.ClearFailoverRiskAcknowledgedAt()
 		return nil
 	case apikey.FieldLastUsedAt:
 		m.ClearLastUsedAt()
@@ -2110,6 +2323,12 @@ func (m *APIKeyMutation) ResetField(name string) error {
 	case apikey.FieldStatus:
 		m.ResetStatus()
 		return nil
+	case apikey.FieldRouteConfigVersion:
+		m.ResetRouteConfigVersion()
+		return nil
+	case apikey.FieldFailoverRiskAcknowledgedAt:
+		m.ResetFailoverRiskAcknowledgedAt()
+		return nil
 	case apikey.FieldLastUsedAt:
 		m.ResetLastUsedAt()
 		return nil
@@ -2161,7 +2380,7 @@ func (m *APIKeyMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *APIKeyMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.user != nil {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2170,6 +2389,9 @@ func (m *APIKeyMutation) AddedEdges() []string {
 	}
 	if m.usage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.route_failover_targets != nil {
+		edges = append(edges, apikey.EdgeRouteFailoverTargets)
 	}
 	return edges
 }
@@ -2192,15 +2414,24 @@ func (m *APIKeyMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeRouteFailoverTargets:
+		ids := make([]ent.Value, 0, len(m.route_failover_targets))
+		for id := range m.route_failover_targets {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *APIKeyMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedusage_logs != nil {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.removedroute_failover_targets != nil {
+		edges = append(edges, apikey.EdgeRouteFailoverTargets)
 	}
 	return edges
 }
@@ -2215,13 +2446,19 @@ func (m *APIKeyMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case apikey.EdgeRouteFailoverTargets:
+		ids := make([]ent.Value, 0, len(m.removedroute_failover_targets))
+		for id := range m.removedroute_failover_targets {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *APIKeyMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.cleareduser {
 		edges = append(edges, apikey.EdgeUser)
 	}
@@ -2230,6 +2467,9 @@ func (m *APIKeyMutation) ClearedEdges() []string {
 	}
 	if m.clearedusage_logs {
 		edges = append(edges, apikey.EdgeUsageLogs)
+	}
+	if m.clearedroute_failover_targets {
+		edges = append(edges, apikey.EdgeRouteFailoverTargets)
 	}
 	return edges
 }
@@ -2244,6 +2484,8 @@ func (m *APIKeyMutation) EdgeCleared(name string) bool {
 		return m.clearedgroup
 	case apikey.EdgeUsageLogs:
 		return m.clearedusage_logs
+	case apikey.EdgeRouteFailoverTargets:
+		return m.clearedroute_failover_targets
 	}
 	return false
 }
@@ -2275,8 +2517,689 @@ func (m *APIKeyMutation) ResetEdge(name string) error {
 	case apikey.EdgeUsageLogs:
 		m.ResetUsageLogs()
 		return nil
+	case apikey.EdgeRouteFailoverTargets:
+		m.ResetRouteFailoverTargets()
+		return nil
 	}
 	return fmt.Errorf("unknown APIKey edge %s", name)
+}
+
+// APIKeyRouteFailoverTargetMutation represents an operation that mutates the APIKeyRouteFailoverTarget nodes in the graph.
+type APIKeyRouteFailoverTargetMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int64
+	created_at          *time.Time
+	updated_at          *time.Time
+	priority            *int
+	addpriority         *int
+	clearedFields       map[string]struct{}
+	api_key             *int64
+	clearedapi_key      bool
+	target_group        *int64
+	clearedtarget_group bool
+	done                bool
+	oldValue            func(context.Context) (*APIKeyRouteFailoverTarget, error)
+	predicates          []predicate.APIKeyRouteFailoverTarget
+}
+
+var _ ent.Mutation = (*APIKeyRouteFailoverTargetMutation)(nil)
+
+// apikeyroutefailovertargetOption allows management of the mutation configuration using functional options.
+type apikeyroutefailovertargetOption func(*APIKeyRouteFailoverTargetMutation)
+
+// newAPIKeyRouteFailoverTargetMutation creates new mutation for the APIKeyRouteFailoverTarget entity.
+func newAPIKeyRouteFailoverTargetMutation(c config, op Op, opts ...apikeyroutefailovertargetOption) *APIKeyRouteFailoverTargetMutation {
+	m := &APIKeyRouteFailoverTargetMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeAPIKeyRouteFailoverTarget,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withAPIKeyRouteFailoverTargetID sets the ID field of the mutation.
+func withAPIKeyRouteFailoverTargetID(id int64) apikeyroutefailovertargetOption {
+	return func(m *APIKeyRouteFailoverTargetMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *APIKeyRouteFailoverTarget
+		)
+		m.oldValue = func(ctx context.Context) (*APIKeyRouteFailoverTarget, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().APIKeyRouteFailoverTarget.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withAPIKeyRouteFailoverTarget sets the old APIKeyRouteFailoverTarget of the mutation.
+func withAPIKeyRouteFailoverTarget(node *APIKeyRouteFailoverTarget) apikeyroutefailovertargetOption {
+	return func(m *APIKeyRouteFailoverTargetMutation) {
+		m.oldValue = func(context.Context) (*APIKeyRouteFailoverTarget, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m APIKeyRouteFailoverTargetMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m APIKeyRouteFailoverTargetMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *APIKeyRouteFailoverTargetMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().APIKeyRouteFailoverTarget.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *APIKeyRouteFailoverTargetMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the APIKeyRouteFailoverTarget entity.
+// If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyRouteFailoverTargetMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *APIKeyRouteFailoverTargetMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *APIKeyRouteFailoverTargetMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the APIKeyRouteFailoverTarget entity.
+// If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyRouteFailoverTargetMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *APIKeyRouteFailoverTargetMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetAPIKeyID sets the "api_key_id" field.
+func (m *APIKeyRouteFailoverTargetMutation) SetAPIKeyID(i int64) {
+	m.api_key = &i
+}
+
+// APIKeyID returns the value of the "api_key_id" field in the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) APIKeyID() (r int64, exists bool) {
+	v := m.api_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAPIKeyID returns the old "api_key_id" field's value of the APIKeyRouteFailoverTarget entity.
+// If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyRouteFailoverTargetMutation) OldAPIKeyID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAPIKeyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAPIKeyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAPIKeyID: %w", err)
+	}
+	return oldValue.APIKeyID, nil
+}
+
+// ResetAPIKeyID resets all changes to the "api_key_id" field.
+func (m *APIKeyRouteFailoverTargetMutation) ResetAPIKeyID() {
+	m.api_key = nil
+}
+
+// SetTargetGroupID sets the "target_group_id" field.
+func (m *APIKeyRouteFailoverTargetMutation) SetTargetGroupID(i int64) {
+	m.target_group = &i
+}
+
+// TargetGroupID returns the value of the "target_group_id" field in the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) TargetGroupID() (r int64, exists bool) {
+	v := m.target_group
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetGroupID returns the old "target_group_id" field's value of the APIKeyRouteFailoverTarget entity.
+// If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyRouteFailoverTargetMutation) OldTargetGroupID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetGroupID: %w", err)
+	}
+	return oldValue.TargetGroupID, nil
+}
+
+// ResetTargetGroupID resets all changes to the "target_group_id" field.
+func (m *APIKeyRouteFailoverTargetMutation) ResetTargetGroupID() {
+	m.target_group = nil
+}
+
+// SetPriority sets the "priority" field.
+func (m *APIKeyRouteFailoverTargetMutation) SetPriority(i int) {
+	m.priority = &i
+	m.addpriority = nil
+}
+
+// Priority returns the value of the "priority" field in the mutation.
+func (m *APIKeyRouteFailoverTargetMutation) Priority() (r int, exists bool) {
+	v := m.priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriority returns the old "priority" field's value of the APIKeyRouteFailoverTarget entity.
+// If the APIKeyRouteFailoverTarget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *APIKeyRouteFailoverTargetMutation) OldPriority(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
+	}
+	return oldValue.Priority, nil
+}
+
+// AddPriority adds i to the "priority" field.
+func (m *APIKeyRouteFailoverTargetMutation) AddPriority(i int) {
+	if m.addpriority != nil {
+		*m.addpriority += i
+	} else {
+		m.addpriority = &i
+	}
+}
+
+// AddedPriority returns the value that was added to the "priority" field in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) AddedPriority() (r int, exists bool) {
+	v := m.addpriority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPriority resets all changes to the "priority" field.
+func (m *APIKeyRouteFailoverTargetMutation) ResetPriority() {
+	m.priority = nil
+	m.addpriority = nil
+}
+
+// ClearAPIKey clears the "api_key" edge to the APIKey entity.
+func (m *APIKeyRouteFailoverTargetMutation) ClearAPIKey() {
+	m.clearedapi_key = true
+	m.clearedFields[apikeyroutefailovertarget.FieldAPIKeyID] = struct{}{}
+}
+
+// APIKeyCleared reports if the "api_key" edge to the APIKey entity was cleared.
+func (m *APIKeyRouteFailoverTargetMutation) APIKeyCleared() bool {
+	return m.clearedapi_key
+}
+
+// APIKeyIDs returns the "api_key" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// APIKeyID instead. It exists only for internal usage by the builders.
+func (m *APIKeyRouteFailoverTargetMutation) APIKeyIDs() (ids []int64) {
+	if id := m.api_key; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetAPIKey resets all changes to the "api_key" edge.
+func (m *APIKeyRouteFailoverTargetMutation) ResetAPIKey() {
+	m.api_key = nil
+	m.clearedapi_key = false
+}
+
+// ClearTargetGroup clears the "target_group" edge to the Group entity.
+func (m *APIKeyRouteFailoverTargetMutation) ClearTargetGroup() {
+	m.clearedtarget_group = true
+	m.clearedFields[apikeyroutefailovertarget.FieldTargetGroupID] = struct{}{}
+}
+
+// TargetGroupCleared reports if the "target_group" edge to the Group entity was cleared.
+func (m *APIKeyRouteFailoverTargetMutation) TargetGroupCleared() bool {
+	return m.clearedtarget_group
+}
+
+// TargetGroupIDs returns the "target_group" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// TargetGroupID instead. It exists only for internal usage by the builders.
+func (m *APIKeyRouteFailoverTargetMutation) TargetGroupIDs() (ids []int64) {
+	if id := m.target_group; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetTargetGroup resets all changes to the "target_group" edge.
+func (m *APIKeyRouteFailoverTargetMutation) ResetTargetGroup() {
+	m.target_group = nil
+	m.clearedtarget_group = false
+}
+
+// Where appends a list predicates to the APIKeyRouteFailoverTargetMutation builder.
+func (m *APIKeyRouteFailoverTargetMutation) Where(ps ...predicate.APIKeyRouteFailoverTarget) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the APIKeyRouteFailoverTargetMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *APIKeyRouteFailoverTargetMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.APIKeyRouteFailoverTarget, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *APIKeyRouteFailoverTargetMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *APIKeyRouteFailoverTargetMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (APIKeyRouteFailoverTarget).
+func (m *APIKeyRouteFailoverTargetMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *APIKeyRouteFailoverTargetMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.created_at != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldUpdatedAt)
+	}
+	if m.api_key != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldAPIKeyID)
+	}
+	if m.target_group != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldTargetGroupID)
+	}
+	if m.priority != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldPriority)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *APIKeyRouteFailoverTargetMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case apikeyroutefailovertarget.FieldCreatedAt:
+		return m.CreatedAt()
+	case apikeyroutefailovertarget.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case apikeyroutefailovertarget.FieldAPIKeyID:
+		return m.APIKeyID()
+	case apikeyroutefailovertarget.FieldTargetGroupID:
+		return m.TargetGroupID()
+	case apikeyroutefailovertarget.FieldPriority:
+		return m.Priority()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *APIKeyRouteFailoverTargetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case apikeyroutefailovertarget.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case apikeyroutefailovertarget.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case apikeyroutefailovertarget.FieldAPIKeyID:
+		return m.OldAPIKeyID(ctx)
+	case apikeyroutefailovertarget.FieldTargetGroupID:
+		return m.OldTargetGroupID(ctx)
+	case apikeyroutefailovertarget.FieldPriority:
+		return m.OldPriority(ctx)
+	}
+	return nil, fmt.Errorf("unknown APIKeyRouteFailoverTarget field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *APIKeyRouteFailoverTargetMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case apikeyroutefailovertarget.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case apikeyroutefailovertarget.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case apikeyroutefailovertarget.FieldAPIKeyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAPIKeyID(v)
+		return nil
+	case apikeyroutefailovertarget.FieldTargetGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetGroupID(v)
+		return nil
+	case apikeyroutefailovertarget.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) AddedFields() []string {
+	var fields []string
+	if m.addpriority != nil {
+		fields = append(fields, apikeyroutefailovertarget.FieldPriority)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *APIKeyRouteFailoverTargetMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case apikeyroutefailovertarget.FieldPriority:
+		return m.AddedPriority()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *APIKeyRouteFailoverTargetMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case apikeyroutefailovertarget.FieldPriority:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPriority(v)
+		return nil
+	}
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *APIKeyRouteFailoverTargetMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *APIKeyRouteFailoverTargetMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *APIKeyRouteFailoverTargetMutation) ResetField(name string) error {
+	switch name {
+	case apikeyroutefailovertarget.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case apikeyroutefailovertarget.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case apikeyroutefailovertarget.FieldAPIKeyID:
+		m.ResetAPIKeyID()
+		return nil
+	case apikeyroutefailovertarget.FieldTargetGroupID:
+		m.ResetTargetGroupID()
+		return nil
+	case apikeyroutefailovertarget.FieldPriority:
+		m.ResetPriority()
+		return nil
+	}
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.api_key != nil {
+		edges = append(edges, apikeyroutefailovertarget.EdgeAPIKey)
+	}
+	if m.target_group != nil {
+		edges = append(edges, apikeyroutefailovertarget.EdgeTargetGroup)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case apikeyroutefailovertarget.EdgeAPIKey:
+		if id := m.api_key; id != nil {
+			return []ent.Value{*id}
+		}
+	case apikeyroutefailovertarget.EdgeTargetGroup:
+		if id := m.target_group; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedapi_key {
+		edges = append(edges, apikeyroutefailovertarget.EdgeAPIKey)
+	}
+	if m.clearedtarget_group {
+		edges = append(edges, apikeyroutefailovertarget.EdgeTargetGroup)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *APIKeyRouteFailoverTargetMutation) EdgeCleared(name string) bool {
+	switch name {
+	case apikeyroutefailovertarget.EdgeAPIKey:
+		return m.clearedapi_key
+	case apikeyroutefailovertarget.EdgeTargetGroup:
+		return m.clearedtarget_group
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *APIKeyRouteFailoverTargetMutation) ClearEdge(name string) error {
+	switch name {
+	case apikeyroutefailovertarget.EdgeAPIKey:
+		m.ClearAPIKey()
+		return nil
+	case apikeyroutefailovertarget.EdgeTargetGroup:
+		m.ClearTargetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *APIKeyRouteFailoverTargetMutation) ResetEdge(name string) error {
+	switch name {
+	case apikeyroutefailovertarget.EdgeAPIKey:
+		m.ResetAPIKey()
+		return nil
+	case apikeyroutefailovertarget.EdgeTargetGroup:
+		m.ResetTargetGroup()
+		return nil
+	}
+	return fmt.Errorf("unknown APIKeyRouteFailoverTarget edge %s", name)
 }
 
 // AccountMutation represents an operation that mutates the Account nodes in the graph.
@@ -43864,6 +44787,13 @@ type UsageLogMutation struct {
 	model_mapping_chain          *string
 	billing_tier                 *string
 	billing_mode                 *string
+	source_group_id              *int64
+	addsource_group_id           *int64
+	route_fallback_used          *bool
+	route_attempt_count          *int16
+	addroute_attempt_count       *int16
+	route_fallback_reason        *string
+	route_sticky_hit             *bool
 	input_tokens                 *int
 	addinput_tokens              *int
 	output_tokens                *int
@@ -44670,6 +45600,253 @@ func (m *UsageLogMutation) GroupIDCleared() bool {
 func (m *UsageLogMutation) ResetGroupID() {
 	m.group = nil
 	delete(m.clearedFields, usagelog.FieldGroupID)
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (m *UsageLogMutation) SetSourceGroupID(i int64) {
+	m.source_group_id = &i
+	m.addsource_group_id = nil
+}
+
+// SourceGroupID returns the value of the "source_group_id" field in the mutation.
+func (m *UsageLogMutation) SourceGroupID() (r int64, exists bool) {
+	v := m.source_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceGroupID returns the old "source_group_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldSourceGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceGroupID: %w", err)
+	}
+	return oldValue.SourceGroupID, nil
+}
+
+// AddSourceGroupID adds i to the "source_group_id" field.
+func (m *UsageLogMutation) AddSourceGroupID(i int64) {
+	if m.addsource_group_id != nil {
+		*m.addsource_group_id += i
+	} else {
+		m.addsource_group_id = &i
+	}
+}
+
+// AddedSourceGroupID returns the value that was added to the "source_group_id" field in this mutation.
+func (m *UsageLogMutation) AddedSourceGroupID() (r int64, exists bool) {
+	v := m.addsource_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (m *UsageLogMutation) ClearSourceGroupID() {
+	m.source_group_id = nil
+	m.addsource_group_id = nil
+	m.clearedFields[usagelog.FieldSourceGroupID] = struct{}{}
+}
+
+// SourceGroupIDCleared returns if the "source_group_id" field was cleared in this mutation.
+func (m *UsageLogMutation) SourceGroupIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldSourceGroupID]
+	return ok
+}
+
+// ResetSourceGroupID resets all changes to the "source_group_id" field.
+func (m *UsageLogMutation) ResetSourceGroupID() {
+	m.source_group_id = nil
+	m.addsource_group_id = nil
+	delete(m.clearedFields, usagelog.FieldSourceGroupID)
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (m *UsageLogMutation) SetRouteFallbackUsed(b bool) {
+	m.route_fallback_used = &b
+}
+
+// RouteFallbackUsed returns the value of the "route_fallback_used" field in the mutation.
+func (m *UsageLogMutation) RouteFallbackUsed() (r bool, exists bool) {
+	v := m.route_fallback_used
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteFallbackUsed returns the old "route_fallback_used" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldRouteFallbackUsed(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteFallbackUsed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteFallbackUsed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteFallbackUsed: %w", err)
+	}
+	return oldValue.RouteFallbackUsed, nil
+}
+
+// ResetRouteFallbackUsed resets all changes to the "route_fallback_used" field.
+func (m *UsageLogMutation) ResetRouteFallbackUsed() {
+	m.route_fallback_used = nil
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (m *UsageLogMutation) SetRouteAttemptCount(i int16) {
+	m.route_attempt_count = &i
+	m.addroute_attempt_count = nil
+}
+
+// RouteAttemptCount returns the value of the "route_attempt_count" field in the mutation.
+func (m *UsageLogMutation) RouteAttemptCount() (r int16, exists bool) {
+	v := m.route_attempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteAttemptCount returns the old "route_attempt_count" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldRouteAttemptCount(ctx context.Context) (v int16, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteAttemptCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteAttemptCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteAttemptCount: %w", err)
+	}
+	return oldValue.RouteAttemptCount, nil
+}
+
+// AddRouteAttemptCount adds i to the "route_attempt_count" field.
+func (m *UsageLogMutation) AddRouteAttemptCount(i int16) {
+	if m.addroute_attempt_count != nil {
+		*m.addroute_attempt_count += i
+	} else {
+		m.addroute_attempt_count = &i
+	}
+}
+
+// AddedRouteAttemptCount returns the value that was added to the "route_attempt_count" field in this mutation.
+func (m *UsageLogMutation) AddedRouteAttemptCount() (r int16, exists bool) {
+	v := m.addroute_attempt_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRouteAttemptCount resets all changes to the "route_attempt_count" field.
+func (m *UsageLogMutation) ResetRouteAttemptCount() {
+	m.route_attempt_count = nil
+	m.addroute_attempt_count = nil
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (m *UsageLogMutation) SetRouteFallbackReason(s string) {
+	m.route_fallback_reason = &s
+}
+
+// RouteFallbackReason returns the value of the "route_fallback_reason" field in the mutation.
+func (m *UsageLogMutation) RouteFallbackReason() (r string, exists bool) {
+	v := m.route_fallback_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteFallbackReason returns the old "route_fallback_reason" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldRouteFallbackReason(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteFallbackReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteFallbackReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteFallbackReason: %w", err)
+	}
+	return oldValue.RouteFallbackReason, nil
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (m *UsageLogMutation) ClearRouteFallbackReason() {
+	m.route_fallback_reason = nil
+	m.clearedFields[usagelog.FieldRouteFallbackReason] = struct{}{}
+}
+
+// RouteFallbackReasonCleared returns if the "route_fallback_reason" field was cleared in this mutation.
+func (m *UsageLogMutation) RouteFallbackReasonCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldRouteFallbackReason]
+	return ok
+}
+
+// ResetRouteFallbackReason resets all changes to the "route_fallback_reason" field.
+func (m *UsageLogMutation) ResetRouteFallbackReason() {
+	m.route_fallback_reason = nil
+	delete(m.clearedFields, usagelog.FieldRouteFallbackReason)
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (m *UsageLogMutation) SetRouteStickyHit(b bool) {
+	m.route_sticky_hit = &b
+}
+
+// RouteStickyHit returns the value of the "route_sticky_hit" field in the mutation.
+func (m *UsageLogMutation) RouteStickyHit() (r bool, exists bool) {
+	v := m.route_sticky_hit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRouteStickyHit returns the old "route_sticky_hit" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldRouteStickyHit(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRouteStickyHit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRouteStickyHit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRouteStickyHit: %w", err)
+	}
+	return oldValue.RouteStickyHit, nil
+}
+
+// ResetRouteStickyHit resets all changes to the "route_sticky_hit" field.
+func (m *UsageLogMutation) ResetRouteStickyHit() {
+	m.route_sticky_hit = nil
 }
 
 // SetSubscriptionID sets the "subscription_id" field.
@@ -46602,7 +47779,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 47)
+	fields := make([]string, 0, 52)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -46644,6 +47821,21 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.group != nil {
 		fields = append(fields, usagelog.FieldGroupID)
+	}
+	if m.source_group_id != nil {
+		fields = append(fields, usagelog.FieldSourceGroupID)
+	}
+	if m.route_fallback_used != nil {
+		fields = append(fields, usagelog.FieldRouteFallbackUsed)
+	}
+	if m.route_attempt_count != nil {
+		fields = append(fields, usagelog.FieldRouteAttemptCount)
+	}
+	if m.route_fallback_reason != nil {
+		fields = append(fields, usagelog.FieldRouteFallbackReason)
+	}
+	if m.route_sticky_hit != nil {
+		fields = append(fields, usagelog.FieldRouteStickyHit)
 	}
 	if m.subscription != nil {
 		fields = append(fields, usagelog.FieldSubscriptionID)
@@ -46780,6 +47972,16 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingMode()
 	case usagelog.FieldGroupID:
 		return m.GroupID()
+	case usagelog.FieldSourceGroupID:
+		return m.SourceGroupID()
+	case usagelog.FieldRouteFallbackUsed:
+		return m.RouteFallbackUsed()
+	case usagelog.FieldRouteAttemptCount:
+		return m.RouteAttemptCount()
+	case usagelog.FieldRouteFallbackReason:
+		return m.RouteFallbackReason()
+	case usagelog.FieldRouteStickyHit:
+		return m.RouteStickyHit()
 	case usagelog.FieldSubscriptionID:
 		return m.SubscriptionID()
 	case usagelog.FieldInputTokens:
@@ -46883,6 +48085,16 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingMode(ctx)
 	case usagelog.FieldGroupID:
 		return m.OldGroupID(ctx)
+	case usagelog.FieldSourceGroupID:
+		return m.OldSourceGroupID(ctx)
+	case usagelog.FieldRouteFallbackUsed:
+		return m.OldRouteFallbackUsed(ctx)
+	case usagelog.FieldRouteAttemptCount:
+		return m.OldRouteAttemptCount(ctx)
+	case usagelog.FieldRouteFallbackReason:
+		return m.OldRouteFallbackReason(ctx)
+	case usagelog.FieldRouteStickyHit:
+		return m.OldRouteStickyHit(ctx)
 	case usagelog.FieldSubscriptionID:
 		return m.OldSubscriptionID(ctx)
 	case usagelog.FieldInputTokens:
@@ -47055,6 +48267,41 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetGroupID(v)
+		return nil
+	case usagelog.FieldSourceGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceGroupID(v)
+		return nil
+	case usagelog.FieldRouteFallbackUsed:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteFallbackUsed(v)
+		return nil
+	case usagelog.FieldRouteAttemptCount:
+		v, ok := value.(int16)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteAttemptCount(v)
+		return nil
+	case usagelog.FieldRouteFallbackReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteFallbackReason(v)
+		return nil
+	case usagelog.FieldRouteStickyHit:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRouteStickyHit(v)
 		return nil
 	case usagelog.FieldSubscriptionID:
 		v, ok := value.(int64)
@@ -47298,6 +48545,12 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addchannel_id != nil {
 		fields = append(fields, usagelog.FieldChannelID)
 	}
+	if m.addsource_group_id != nil {
+		fields = append(fields, usagelog.FieldSourceGroupID)
+	}
+	if m.addroute_attempt_count != nil {
+		fields = append(fields, usagelog.FieldRouteAttemptCount)
+	}
 	if m.addinput_tokens != nil {
 		fields = append(fields, usagelog.FieldInputTokens)
 	}
@@ -47368,6 +48621,10 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case usagelog.FieldChannelID:
 		return m.AddedChannelID()
+	case usagelog.FieldSourceGroupID:
+		return m.AddedSourceGroupID()
+	case usagelog.FieldRouteAttemptCount:
+		return m.AddedRouteAttemptCount()
 	case usagelog.FieldInputTokens:
 		return m.AddedInputTokens()
 	case usagelog.FieldOutputTokens:
@@ -47423,6 +48680,20 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddChannelID(v)
+		return nil
+	case usagelog.FieldSourceGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSourceGroupID(v)
+		return nil
+	case usagelog.FieldRouteAttemptCount:
+		v, ok := value.(int16)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRouteAttemptCount(v)
 		return nil
 	case usagelog.FieldInputTokens:
 		v, ok := value.(int)
@@ -47599,6 +48870,12 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldGroupID) {
 		fields = append(fields, usagelog.FieldGroupID)
 	}
+	if m.FieldCleared(usagelog.FieldSourceGroupID) {
+		fields = append(fields, usagelog.FieldSourceGroupID)
+	}
+	if m.FieldCleared(usagelog.FieldRouteFallbackReason) {
+		fields = append(fields, usagelog.FieldRouteFallbackReason)
+	}
 	if m.FieldCleared(usagelog.FieldSubscriptionID) {
 		fields = append(fields, usagelog.FieldSubscriptionID)
 	}
@@ -47678,6 +48955,12 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldGroupID:
 		m.ClearGroupID()
+		return nil
+	case usagelog.FieldSourceGroupID:
+		m.ClearSourceGroupID()
+		return nil
+	case usagelog.FieldRouteFallbackReason:
+		m.ClearRouteFallbackReason()
 		return nil
 	case usagelog.FieldSubscriptionID:
 		m.ClearSubscriptionID()
@@ -47767,6 +49050,21 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldGroupID:
 		m.ResetGroupID()
+		return nil
+	case usagelog.FieldSourceGroupID:
+		m.ResetSourceGroupID()
+		return nil
+	case usagelog.FieldRouteFallbackUsed:
+		m.ResetRouteFallbackUsed()
+		return nil
+	case usagelog.FieldRouteAttemptCount:
+		m.ResetRouteAttemptCount()
+		return nil
+	case usagelog.FieldRouteFallbackReason:
+		m.ResetRouteFallbackReason()
+		return nil
+	case usagelog.FieldRouteStickyHit:
+		m.ResetRouteStickyHit()
 		return nil
 	case usagelog.FieldSubscriptionID:
 		m.ResetSubscriptionID()

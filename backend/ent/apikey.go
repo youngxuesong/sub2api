@@ -36,6 +36,10 @@ type APIKey struct {
 	GroupID *int64 `json:"group_id,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// RouteConfigVersion holds the value of the "route_config_version" field.
+	RouteConfigVersion int64 `json:"route_config_version,omitempty"`
+	// FailoverRiskAcknowledgedAt holds the value of the "failover_risk_acknowledged_at" field.
+	FailoverRiskAcknowledgedAt *time.Time `json:"failover_risk_acknowledged_at,omitempty"`
 	// Last usage time of this API key
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	// Allowed IPs/CIDRs, e.g. ["192.168.1.100", "10.0.0.0/8"]
@@ -80,9 +84,11 @@ type APIKeyEdges struct {
 	Group *Group `json:"group,omitempty"`
 	// UsageLogs holds the value of the usage_logs edge.
 	UsageLogs []*UsageLog `json:"usage_logs,omitempty"`
+	// RouteFailoverTargets holds the value of the route_failover_targets edge.
+	RouteFailoverTargets []*APIKeyRouteFailoverTarget `json:"route_failover_targets,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
 }
 
 // UserOrErr returns the User value or an error if the edge
@@ -116,6 +122,15 @@ func (e APIKeyEdges) UsageLogsOrErr() ([]*UsageLog, error) {
 	return nil, &NotLoadedError{edge: "usage_logs"}
 }
 
+// RouteFailoverTargetsOrErr returns the RouteFailoverTargets value or an error if the edge
+// was not loaded in eager-loading.
+func (e APIKeyEdges) RouteFailoverTargetsOrErr() ([]*APIKeyRouteFailoverTarget, error) {
+	if e.loadedTypes[3] {
+		return e.RouteFailoverTargets, nil
+	}
+	return nil, &NotLoadedError{edge: "route_failover_targets"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*APIKey) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -125,11 +140,11 @@ func (*APIKey) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case apikey.FieldQuota, apikey.FieldQuotaUsed, apikey.FieldRateLimit5h, apikey.FieldRateLimit1d, apikey.FieldRateLimit7d, apikey.FieldUsage5h, apikey.FieldUsage1d, apikey.FieldUsage7d:
 			values[i] = new(sql.NullFloat64)
-		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID:
+		case apikey.FieldID, apikey.FieldUserID, apikey.FieldGroupID, apikey.FieldRouteConfigVersion:
 			values[i] = new(sql.NullInt64)
 		case apikey.FieldKey, apikey.FieldName, apikey.FieldStatus:
 			values[i] = new(sql.NullString)
-		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldLastUsedAt, apikey.FieldExpiresAt, apikey.FieldWindow5hStart, apikey.FieldWindow1dStart, apikey.FieldWindow7dStart:
+		case apikey.FieldCreatedAt, apikey.FieldUpdatedAt, apikey.FieldDeletedAt, apikey.FieldFailoverRiskAcknowledgedAt, apikey.FieldLastUsedAt, apikey.FieldExpiresAt, apikey.FieldWindow5hStart, apikey.FieldWindow1dStart, apikey.FieldWindow7dStart:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -201,6 +216,19 @@ func (_m *APIKey) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case apikey.FieldRouteConfigVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field route_config_version", values[i])
+			} else if value.Valid {
+				_m.RouteConfigVersion = value.Int64
+			}
+		case apikey.FieldFailoverRiskAcknowledgedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field failover_risk_acknowledged_at", values[i])
+			} else if value.Valid {
+				_m.FailoverRiskAcknowledgedAt = new(time.Time)
+				*_m.FailoverRiskAcknowledgedAt = value.Time
 			}
 		case apikey.FieldLastUsedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -329,6 +357,11 @@ func (_m *APIKey) QueryUsageLogs() *UsageLogQuery {
 	return NewAPIKeyClient(_m.config).QueryUsageLogs(_m)
 }
 
+// QueryRouteFailoverTargets queries the "route_failover_targets" edge of the APIKey entity.
+func (_m *APIKey) QueryRouteFailoverTargets() *APIKeyRouteFailoverTargetQuery {
+	return NewAPIKeyClient(_m.config).QueryRouteFailoverTargets(_m)
+}
+
 // Update returns a builder for updating this APIKey.
 // Note that you need to call APIKey.Unwrap() before calling this method if this APIKey
 // was returned from a transaction, and the transaction was committed or rolled back.
@@ -379,6 +412,14 @@ func (_m *APIKey) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("route_config_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.RouteConfigVersion))
+	builder.WriteString(", ")
+	if v := _m.FailoverRiskAcknowledgedAt; v != nil {
+		builder.WriteString("failover_risk_acknowledged_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	if v := _m.LastUsedAt; v != nil {
 		builder.WriteString("last_used_at=")

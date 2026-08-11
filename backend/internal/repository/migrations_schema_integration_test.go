@@ -60,6 +60,23 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 
 	// api_keys: key length should be 128
 	requireColumn(t, tx, "api_keys", "key", "character varying", 128, false)
+	requireColumn(t, tx, "api_keys", "route_config_version", "bigint", 0, false)
+	requireColumn(t, tx, "api_keys", "failover_risk_acknowledged_at", "timestamp with time zone", 0, true)
+
+	var incorrectlyVersionedAPIKeys int
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM api_keys WHERE route_config_version <> 1").Scan(&incorrectlyVersionedAPIKeys))
+	require.Zero(t, incorrectlyVersionedAPIKeys, "expected existing API keys to retain the default route config version")
+
+	// API key route failover targets are initially empty and cascade with either parent.
+	requireUniqueIndexDefinition(t, tx, "api_key_route_failover_targets", "api_key_route_failover_targets_api_key_id_target_group_id_key", "api_key_id", "target_group_id")
+	requireUniqueIndexDefinition(t, tx, "api_key_route_failover_targets", "api_key_route_failover_targets_api_key_id_priority_key", "api_key_id", "priority")
+	requireIndex(t, tx, "api_key_route_failover_targets", "api_key_route_failover_targets_group_idx")
+	requireForeignKeyOnDelete(t, tx, "api_key_route_failover_targets", "api_key_id", "api_keys", "CASCADE")
+	requireForeignKeyOnDelete(t, tx, "api_key_route_failover_targets", "target_group_id", "groups", "CASCADE")
+
+	var routeFailoverTargetCount int
+	require.NoError(t, tx.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM api_key_route_failover_targets").Scan(&routeFailoverTargetCount))
+	require.Zero(t, routeFailoverTargetCount, "migration must not copy legacy route failover targets")
 
 	// redeem_codes: subscription fields
 	requireColumn(t, tx, "redeem_codes", "group_id", "bigint", 0, true)
@@ -78,6 +95,12 @@ func TestMigrationsRunner_IsIdempotent_AndSchemaIsUpToDate(t *testing.T) {
 	requireColumn(t, tx, "usage_logs", "video_duration_seconds", "integer", 0, true)
 	requireColumn(t, tx, "usage_logs", "upstream_response_model", "character varying", 200, true)
 	requireColumn(t, tx, "usage_logs", "upstream_model_mismatch", "boolean", 0, true)
+	requireColumn(t, tx, "usage_logs", "source_group_id", "bigint", 0, true)
+	requireColumn(t, tx, "usage_logs", "route_fallback_used", "boolean", 0, false)
+	requireColumn(t, tx, "usage_logs", "route_attempt_count", "smallint", 0, false)
+	requireColumn(t, tx, "usage_logs", "route_fallback_reason", "character varying", 64, true)
+	requireColumn(t, tx, "usage_logs", "route_sticky_hit", "boolean", 0, false)
+	requireIndex(t, tx, "usage_logs", "usage_logs_source_group_created_idx")
 	requireIndex(t, tx, "usage_logs", usageLogsUpstreamModelMismatchIndex)
 
 	var mismatchIndexDef string
@@ -244,6 +267,34 @@ SELECT EXISTS (
 }
 
 func requirePartialUniqueIndexDefinition(t *testing.T, tx *sql.Tx, table, index string, fragments ...string) {
+	t.Helper()
+
+	var (
+		unique bool
+		def    string
+	)
+
+	err := tx.QueryRowContext(context.Background(), `
+SELECT
+	i.indisunique,
+	pg_get_indexdef(i.indexrelid)
+FROM pg_class idx
+JOIN pg_index i ON i.indexrelid = idx.oid
+JOIN pg_class tbl ON tbl.oid = i.indrelid
+JOIN pg_namespace ns ON ns.oid = tbl.relnamespace
+WHERE ns.nspname = 'public'
+  AND tbl.relname = $1
+  AND idx.relname = $2
+`, table, index).Scan(&unique, &def)
+	require.NoError(t, err, "query index definition for %s.%s", table, index)
+	require.True(t, unique, "expected index %s on %s to be unique", index, table)
+
+	for _, fragment := range fragments {
+		require.Contains(t, def, fragment, "expected index definition for %s.%s to contain %q", table, index, fragment)
+	}
+}
+
+func requireUniqueIndexDefinition(t *testing.T, tx *sql.Tx, table, index string, fragments ...string) {
 	t.Helper()
 
 	var (

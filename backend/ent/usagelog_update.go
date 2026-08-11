@@ -289,6 +289,102 @@ func (_u *UsageLogUpdate) ClearGroupID() *UsageLogUpdate {
 	return _u
 }
 
+// SetSourceGroupID sets the "source_group_id" field.
+func (_u *UsageLogUpdate) SetSourceGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.ResetSourceGroupID()
+	_u.mutation.SetSourceGroupID(v)
+	return _u
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableSourceGroupID(v *int64) *UsageLogUpdate {
+	if v != nil {
+		_u.SetSourceGroupID(*v)
+	}
+	return _u
+}
+
+// AddSourceGroupID adds value to the "source_group_id" field.
+func (_u *UsageLogUpdate) AddSourceGroupID(v int64) *UsageLogUpdate {
+	_u.mutation.AddSourceGroupID(v)
+	return _u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (_u *UsageLogUpdate) ClearSourceGroupID() *UsageLogUpdate {
+	_u.mutation.ClearSourceGroupID()
+	return _u
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (_u *UsageLogUpdate) SetRouteFallbackUsed(v bool) *UsageLogUpdate {
+	_u.mutation.SetRouteFallbackUsed(v)
+	return _u
+}
+
+// SetNillableRouteFallbackUsed sets the "route_fallback_used" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableRouteFallbackUsed(v *bool) *UsageLogUpdate {
+	if v != nil {
+		_u.SetRouteFallbackUsed(*v)
+	}
+	return _u
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (_u *UsageLogUpdate) SetRouteAttemptCount(v int16) *UsageLogUpdate {
+	_u.mutation.ResetRouteAttemptCount()
+	_u.mutation.SetRouteAttemptCount(v)
+	return _u
+}
+
+// SetNillableRouteAttemptCount sets the "route_attempt_count" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableRouteAttemptCount(v *int16) *UsageLogUpdate {
+	if v != nil {
+		_u.SetRouteAttemptCount(*v)
+	}
+	return _u
+}
+
+// AddRouteAttemptCount adds value to the "route_attempt_count" field.
+func (_u *UsageLogUpdate) AddRouteAttemptCount(v int16) *UsageLogUpdate {
+	_u.mutation.AddRouteAttemptCount(v)
+	return _u
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (_u *UsageLogUpdate) SetRouteFallbackReason(v string) *UsageLogUpdate {
+	_u.mutation.SetRouteFallbackReason(v)
+	return _u
+}
+
+// SetNillableRouteFallbackReason sets the "route_fallback_reason" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableRouteFallbackReason(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetRouteFallbackReason(*v)
+	}
+	return _u
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (_u *UsageLogUpdate) ClearRouteFallbackReason() *UsageLogUpdate {
+	_u.mutation.ClearRouteFallbackReason()
+	return _u
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (_u *UsageLogUpdate) SetRouteStickyHit(v bool) *UsageLogUpdate {
+	_u.mutation.SetRouteStickyHit(v)
+	return _u
+}
+
+// SetNillableRouteStickyHit sets the "route_sticky_hit" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableRouteStickyHit(v *bool) *UsageLogUpdate {
+	if v != nil {
+		_u.SetRouteStickyHit(*v)
+	}
+	return _u
+}
+
 // SetSubscriptionID sets the "subscription_id" field.
 func (_u *UsageLogUpdate) SetSubscriptionID(v int64) *UsageLogUpdate {
 	_u.mutation.SetSubscriptionID(v)
@@ -1076,6 +1172,11 @@ func (_u *UsageLogUpdate) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RouteFallbackReason(); ok {
+		if err := usagelog.RouteFallbackReasonValidator(v); err != nil {
+			return &ValidationError{Name: "route_fallback_reason", err: fmt.Errorf(`ent: validator failed for field "UsageLog.route_fallback_reason": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -1191,6 +1292,33 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceGroupID(); ok {
+		_spec.SetField(usagelog.FieldSourceGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSourceGroupID(); ok {
+		_spec.AddField(usagelog.FieldSourceGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.SourceGroupIDCleared() {
+		_spec.ClearField(usagelog.FieldSourceGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RouteFallbackUsed(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackUsed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RouteAttemptCount(); ok {
+		_spec.SetField(usagelog.FieldRouteAttemptCount, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.AddedRouteAttemptCount(); ok {
+		_spec.AddField(usagelog.FieldRouteAttemptCount, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.RouteFallbackReason(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackReason, field.TypeString, value)
+	}
+	if _u.mutation.RouteFallbackReasonCleared() {
+		_spec.ClearField(usagelog.FieldRouteFallbackReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.RouteStickyHit(); ok {
+		_spec.SetField(usagelog.FieldRouteStickyHit, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1800,6 +1928,102 @@ func (_u *UsageLogUpdateOne) SetNillableGroupID(v *int64) *UsageLogUpdateOne {
 // ClearGroupID clears the value of the "group_id" field.
 func (_u *UsageLogUpdateOne) ClearGroupID() *UsageLogUpdateOne {
 	_u.mutation.ClearGroupID()
+	return _u
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (_u *UsageLogUpdateOne) SetSourceGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.ResetSourceGroupID()
+	_u.mutation.SetSourceGroupID(v)
+	return _u
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableSourceGroupID(v *int64) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetSourceGroupID(*v)
+	}
+	return _u
+}
+
+// AddSourceGroupID adds value to the "source_group_id" field.
+func (_u *UsageLogUpdateOne) AddSourceGroupID(v int64) *UsageLogUpdateOne {
+	_u.mutation.AddSourceGroupID(v)
+	return _u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (_u *UsageLogUpdateOne) ClearSourceGroupID() *UsageLogUpdateOne {
+	_u.mutation.ClearSourceGroupID()
+	return _u
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (_u *UsageLogUpdateOne) SetRouteFallbackUsed(v bool) *UsageLogUpdateOne {
+	_u.mutation.SetRouteFallbackUsed(v)
+	return _u
+}
+
+// SetNillableRouteFallbackUsed sets the "route_fallback_used" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableRouteFallbackUsed(v *bool) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetRouteFallbackUsed(*v)
+	}
+	return _u
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (_u *UsageLogUpdateOne) SetRouteAttemptCount(v int16) *UsageLogUpdateOne {
+	_u.mutation.ResetRouteAttemptCount()
+	_u.mutation.SetRouteAttemptCount(v)
+	return _u
+}
+
+// SetNillableRouteAttemptCount sets the "route_attempt_count" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableRouteAttemptCount(v *int16) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetRouteAttemptCount(*v)
+	}
+	return _u
+}
+
+// AddRouteAttemptCount adds value to the "route_attempt_count" field.
+func (_u *UsageLogUpdateOne) AddRouteAttemptCount(v int16) *UsageLogUpdateOne {
+	_u.mutation.AddRouteAttemptCount(v)
+	return _u
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (_u *UsageLogUpdateOne) SetRouteFallbackReason(v string) *UsageLogUpdateOne {
+	_u.mutation.SetRouteFallbackReason(v)
+	return _u
+}
+
+// SetNillableRouteFallbackReason sets the "route_fallback_reason" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableRouteFallbackReason(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetRouteFallbackReason(*v)
+	}
+	return _u
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (_u *UsageLogUpdateOne) ClearRouteFallbackReason() *UsageLogUpdateOne {
+	_u.mutation.ClearRouteFallbackReason()
+	return _u
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (_u *UsageLogUpdateOne) SetRouteStickyHit(v bool) *UsageLogUpdateOne {
+	_u.mutation.SetRouteStickyHit(v)
+	return _u
+}
+
+// SetNillableRouteStickyHit sets the "route_sticky_hit" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableRouteStickyHit(v *bool) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetRouteStickyHit(*v)
+	}
 	return _u
 }
 
@@ -2603,6 +2827,11 @@ func (_u *UsageLogUpdateOne) check() error {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.RouteFallbackReason(); ok {
+		if err := usagelog.RouteFallbackReasonValidator(v); err != nil {
+			return &ValidationError{Name: "route_fallback_reason", err: fmt.Errorf(`ent: validator failed for field "UsageLog.route_fallback_reason": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.UserAgent(); ok {
 		if err := usagelog.UserAgentValidator(v); err != nil {
 			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "UsageLog.user_agent": %w`, err)}
@@ -2735,6 +2964,33 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.BillingModeCleared() {
 		_spec.ClearField(usagelog.FieldBillingMode, field.TypeString)
+	}
+	if value, ok := _u.mutation.SourceGroupID(); ok {
+		_spec.SetField(usagelog.FieldSourceGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSourceGroupID(); ok {
+		_spec.AddField(usagelog.FieldSourceGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.SourceGroupIDCleared() {
+		_spec.ClearField(usagelog.FieldSourceGroupID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.RouteFallbackUsed(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackUsed, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RouteAttemptCount(); ok {
+		_spec.SetField(usagelog.FieldRouteAttemptCount, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.AddedRouteAttemptCount(); ok {
+		_spec.AddField(usagelog.FieldRouteAttemptCount, field.TypeInt16, value)
+	}
+	if value, ok := _u.mutation.RouteFallbackReason(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackReason, field.TypeString, value)
+	}
+	if _u.mutation.RouteFallbackReasonCleared() {
+		_spec.ClearField(usagelog.FieldRouteFallbackReason, field.TypeString)
+	}
+	if value, ok := _u.mutation.RouteStickyHit(); ok {
+		_spec.SetField(usagelog.FieldRouteStickyHit, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)

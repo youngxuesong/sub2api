@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/apikeyroutefailovertarget"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
@@ -109,6 +110,34 @@ func (_c *APIKeyCreate) SetStatus(v string) *APIKeyCreate {
 func (_c *APIKeyCreate) SetNillableStatus(v *string) *APIKeyCreate {
 	if v != nil {
 		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (_c *APIKeyCreate) SetRouteConfigVersion(v int64) *APIKeyCreate {
+	_c.mutation.SetRouteConfigVersion(v)
+	return _c
+}
+
+// SetNillableRouteConfigVersion sets the "route_config_version" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableRouteConfigVersion(v *int64) *APIKeyCreate {
+	if v != nil {
+		_c.SetRouteConfigVersion(*v)
+	}
+	return _c
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (_c *APIKeyCreate) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyCreate {
+	_c.mutation.SetFailoverRiskAcknowledgedAt(v)
+	return _c
+}
+
+// SetNillableFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field if the given value is not nil.
+func (_c *APIKeyCreate) SetNillableFailoverRiskAcknowledgedAt(v *time.Time) *APIKeyCreate {
+	if v != nil {
+		_c.SetFailoverRiskAcknowledgedAt(*v)
 	}
 	return _c
 }
@@ -332,6 +361,21 @@ func (_c *APIKeyCreate) AddUsageLogs(v ...*UsageLog) *APIKeyCreate {
 	return _c.AddUsageLogIDs(ids...)
 }
 
+// AddRouteFailoverTargetIDs adds the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity by IDs.
+func (_c *APIKeyCreate) AddRouteFailoverTargetIDs(ids ...int64) *APIKeyCreate {
+	_c.mutation.AddRouteFailoverTargetIDs(ids...)
+	return _c
+}
+
+// AddRouteFailoverTargets adds the "route_failover_targets" edges to the APIKeyRouteFailoverTarget entity.
+func (_c *APIKeyCreate) AddRouteFailoverTargets(v ...*APIKeyRouteFailoverTarget) *APIKeyCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddRouteFailoverTargetIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_c *APIKeyCreate) Mutation() *APIKeyMutation {
 	return _c.mutation
@@ -386,6 +430,10 @@ func (_c *APIKeyCreate) defaults() error {
 	if _, ok := _c.mutation.Status(); !ok {
 		v := apikey.DefaultStatus
 		_c.mutation.SetStatus(v)
+	}
+	if _, ok := _c.mutation.RouteConfigVersion(); !ok {
+		v := apikey.DefaultRouteConfigVersion
+		_c.mutation.SetRouteConfigVersion(v)
 	}
 	if _, ok := _c.mutation.Quota(); !ok {
 		v := apikey.DefaultQuota
@@ -456,6 +504,9 @@ func (_c *APIKeyCreate) check() error {
 		if err := apikey.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "APIKey.status": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.RouteConfigVersion(); !ok {
+		return &ValidationError{Name: "route_config_version", err: errors.New(`ent: missing required field "APIKey.route_config_version"`)}
 	}
 	if _, ok := _c.mutation.Quota(); !ok {
 		return &ValidationError{Name: "quota", err: errors.New(`ent: missing required field "APIKey.quota"`)}
@@ -534,6 +585,14 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.RouteConfigVersion(); ok {
+		_spec.SetField(apikey.FieldRouteConfigVersion, field.TypeInt64, value)
+		_node.RouteConfigVersion = value
+	}
+	if value, ok := _c.mutation.FailoverRiskAcknowledgedAt(); ok {
+		_spec.SetField(apikey.FieldFailoverRiskAcknowledgedAt, field.TypeTime, value)
+		_node.FailoverRiskAcknowledgedAt = &value
 	}
 	if value, ok := _c.mutation.LastUsedAt(); ok {
 		_spec.SetField(apikey.FieldLastUsedAt, field.TypeTime, value)
@@ -638,6 +697,22 @@ func (_c *APIKeyCreate) createSpec() (*APIKey, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.RouteFailoverTargetsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {
@@ -790,6 +865,42 @@ func (u *APIKeyUpsert) SetStatus(v string) *APIKeyUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *APIKeyUpsert) UpdateStatus() *APIKeyUpsert {
 	u.SetExcluded(apikey.FieldStatus)
+	return u
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (u *APIKeyUpsert) SetRouteConfigVersion(v int64) *APIKeyUpsert {
+	u.Set(apikey.FieldRouteConfigVersion, v)
+	return u
+}
+
+// UpdateRouteConfigVersion sets the "route_config_version" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateRouteConfigVersion() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldRouteConfigVersion)
+	return u
+}
+
+// AddRouteConfigVersion adds v to the "route_config_version" field.
+func (u *APIKeyUpsert) AddRouteConfigVersion(v int64) *APIKeyUpsert {
+	u.Add(apikey.FieldRouteConfigVersion, v)
+	return u
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsert) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyUpsert {
+	u.Set(apikey.FieldFailoverRiskAcknowledgedAt, v)
+	return u
+}
+
+// UpdateFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field to the value that was provided on create.
+func (u *APIKeyUpsert) UpdateFailoverRiskAcknowledgedAt() *APIKeyUpsert {
+	u.SetExcluded(apikey.FieldFailoverRiskAcknowledgedAt)
+	return u
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsert) ClearFailoverRiskAcknowledgedAt() *APIKeyUpsert {
+	u.SetNull(apikey.FieldFailoverRiskAcknowledgedAt)
 	return u
 }
 
@@ -1217,6 +1328,48 @@ func (u *APIKeyUpsertOne) SetStatus(v string) *APIKeyUpsertOne {
 func (u *APIKeyUpsertOne) UpdateStatus() *APIKeyUpsertOne {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (u *APIKeyUpsertOne) SetRouteConfigVersion(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRouteConfigVersion(v)
+	})
+}
+
+// AddRouteConfigVersion adds v to the "route_config_version" field.
+func (u *APIKeyUpsertOne) AddRouteConfigVersion(v int64) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddRouteConfigVersion(v)
+	})
+}
+
+// UpdateRouteConfigVersion sets the "route_config_version" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateRouteConfigVersion() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRouteConfigVersion()
+	})
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsertOne) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetFailoverRiskAcknowledgedAt(v)
+	})
+}
+
+// UpdateFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field to the value that was provided on create.
+func (u *APIKeyUpsertOne) UpdateFailoverRiskAcknowledgedAt() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateFailoverRiskAcknowledgedAt()
+	})
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsertOne) ClearFailoverRiskAcknowledgedAt() *APIKeyUpsertOne {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearFailoverRiskAcknowledgedAt()
 	})
 }
 
@@ -1855,6 +2008,48 @@ func (u *APIKeyUpsertBulk) SetStatus(v string) *APIKeyUpsertBulk {
 func (u *APIKeyUpsertBulk) UpdateStatus() *APIKeyUpsertBulk {
 	return u.Update(func(s *APIKeyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (u *APIKeyUpsertBulk) SetRouteConfigVersion(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetRouteConfigVersion(v)
+	})
+}
+
+// AddRouteConfigVersion adds v to the "route_config_version" field.
+func (u *APIKeyUpsertBulk) AddRouteConfigVersion(v int64) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.AddRouteConfigVersion(v)
+	})
+}
+
+// UpdateRouteConfigVersion sets the "route_config_version" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateRouteConfigVersion() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateRouteConfigVersion()
+	})
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsertBulk) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.SetFailoverRiskAcknowledgedAt(v)
+	})
+}
+
+// UpdateFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field to the value that was provided on create.
+func (u *APIKeyUpsertBulk) UpdateFailoverRiskAcknowledgedAt() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.UpdateFailoverRiskAcknowledgedAt()
+	})
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (u *APIKeyUpsertBulk) ClearFailoverRiskAcknowledgedAt() *APIKeyUpsertBulk {
+	return u.Update(func(s *APIKeyUpsert) {
+		s.ClearFailoverRiskAcknowledgedAt()
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/apikeyroutefailovertarget"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
@@ -131,6 +132,47 @@ func (_u *APIKeyUpdate) SetNillableStatus(v *string) *APIKeyUpdate {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (_u *APIKeyUpdate) SetRouteConfigVersion(v int64) *APIKeyUpdate {
+	_u.mutation.ResetRouteConfigVersion()
+	_u.mutation.SetRouteConfigVersion(v)
+	return _u
+}
+
+// SetNillableRouteConfigVersion sets the "route_config_version" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableRouteConfigVersion(v *int64) *APIKeyUpdate {
+	if v != nil {
+		_u.SetRouteConfigVersion(*v)
+	}
+	return _u
+}
+
+// AddRouteConfigVersion adds value to the "route_config_version" field.
+func (_u *APIKeyUpdate) AddRouteConfigVersion(v int64) *APIKeyUpdate {
+	_u.mutation.AddRouteConfigVersion(v)
+	return _u
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (_u *APIKeyUpdate) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyUpdate {
+	_u.mutation.SetFailoverRiskAcknowledgedAt(v)
+	return _u
+}
+
+// SetNillableFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field if the given value is not nil.
+func (_u *APIKeyUpdate) SetNillableFailoverRiskAcknowledgedAt(v *time.Time) *APIKeyUpdate {
+	if v != nil {
+		_u.SetFailoverRiskAcknowledgedAt(*v)
+	}
+	return _u
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (_u *APIKeyUpdate) ClearFailoverRiskAcknowledgedAt() *APIKeyUpdate {
+	_u.mutation.ClearFailoverRiskAcknowledgedAt()
 	return _u
 }
 
@@ -463,6 +505,21 @@ func (_u *APIKeyUpdate) AddUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddRouteFailoverTargetIDs adds the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity by IDs.
+func (_u *APIKeyUpdate) AddRouteFailoverTargetIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.AddRouteFailoverTargetIDs(ids...)
+	return _u
+}
+
+// AddRouteFailoverTargets adds the "route_failover_targets" edges to the APIKeyRouteFailoverTarget entity.
+func (_u *APIKeyUpdate) AddRouteFailoverTargets(v ...*APIKeyRouteFailoverTarget) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRouteFailoverTargetIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_u *APIKeyUpdate) Mutation() *APIKeyMutation {
 	return _u.mutation
@@ -499,6 +556,27 @@ func (_u *APIKeyUpdate) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearRouteFailoverTargets clears all "route_failover_targets" edges to the APIKeyRouteFailoverTarget entity.
+func (_u *APIKeyUpdate) ClearRouteFailoverTargets() *APIKeyUpdate {
+	_u.mutation.ClearRouteFailoverTargets()
+	return _u
+}
+
+// RemoveRouteFailoverTargetIDs removes the "route_failover_targets" edge to APIKeyRouteFailoverTarget entities by IDs.
+func (_u *APIKeyUpdate) RemoveRouteFailoverTargetIDs(ids ...int64) *APIKeyUpdate {
+	_u.mutation.RemoveRouteFailoverTargetIDs(ids...)
+	return _u
+}
+
+// RemoveRouteFailoverTargets removes "route_failover_targets" edges to APIKeyRouteFailoverTarget entities.
+func (_u *APIKeyUpdate) RemoveRouteFailoverTargets(v ...*APIKeyRouteFailoverTarget) *APIKeyUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRouteFailoverTargetIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -595,6 +673,18 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RouteConfigVersion(); ok {
+		_spec.SetField(apikey.FieldRouteConfigVersion, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRouteConfigVersion(); ok {
+		_spec.AddField(apikey.FieldRouteConfigVersion, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.FailoverRiskAcknowledgedAt(); ok {
+		_spec.SetField(apikey.FieldFailoverRiskAcknowledgedAt, field.TypeTime, value)
+	}
+	if _u.mutation.FailoverRiskAcknowledgedAtCleared() {
+		_spec.ClearField(apikey.FieldFailoverRiskAcknowledgedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(apikey.FieldLastUsedAt, field.TypeTime, value)
@@ -799,6 +889,51 @@ func (_u *APIKeyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if _u.mutation.RouteFailoverTargetsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRouteFailoverTargetsIDs(); len(nodes) > 0 && !_u.mutation.RouteFailoverTargetsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RouteFailoverTargetsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{apikey.Label}
@@ -918,6 +1053,47 @@ func (_u *APIKeyUpdateOne) SetNillableStatus(v *string) *APIKeyUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetRouteConfigVersion sets the "route_config_version" field.
+func (_u *APIKeyUpdateOne) SetRouteConfigVersion(v int64) *APIKeyUpdateOne {
+	_u.mutation.ResetRouteConfigVersion()
+	_u.mutation.SetRouteConfigVersion(v)
+	return _u
+}
+
+// SetNillableRouteConfigVersion sets the "route_config_version" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableRouteConfigVersion(v *int64) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetRouteConfigVersion(*v)
+	}
+	return _u
+}
+
+// AddRouteConfigVersion adds value to the "route_config_version" field.
+func (_u *APIKeyUpdateOne) AddRouteConfigVersion(v int64) *APIKeyUpdateOne {
+	_u.mutation.AddRouteConfigVersion(v)
+	return _u
+}
+
+// SetFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field.
+func (_u *APIKeyUpdateOne) SetFailoverRiskAcknowledgedAt(v time.Time) *APIKeyUpdateOne {
+	_u.mutation.SetFailoverRiskAcknowledgedAt(v)
+	return _u
+}
+
+// SetNillableFailoverRiskAcknowledgedAt sets the "failover_risk_acknowledged_at" field if the given value is not nil.
+func (_u *APIKeyUpdateOne) SetNillableFailoverRiskAcknowledgedAt(v *time.Time) *APIKeyUpdateOne {
+	if v != nil {
+		_u.SetFailoverRiskAcknowledgedAt(*v)
+	}
+	return _u
+}
+
+// ClearFailoverRiskAcknowledgedAt clears the value of the "failover_risk_acknowledged_at" field.
+func (_u *APIKeyUpdateOne) ClearFailoverRiskAcknowledgedAt() *APIKeyUpdateOne {
+	_u.mutation.ClearFailoverRiskAcknowledgedAt()
 	return _u
 }
 
@@ -1250,6 +1426,21 @@ func (_u *APIKeyUpdateOne) AddUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 	return _u.AddUsageLogIDs(ids...)
 }
 
+// AddRouteFailoverTargetIDs adds the "route_failover_targets" edge to the APIKeyRouteFailoverTarget entity by IDs.
+func (_u *APIKeyUpdateOne) AddRouteFailoverTargetIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.AddRouteFailoverTargetIDs(ids...)
+	return _u
+}
+
+// AddRouteFailoverTargets adds the "route_failover_targets" edges to the APIKeyRouteFailoverTarget entity.
+func (_u *APIKeyUpdateOne) AddRouteFailoverTargets(v ...*APIKeyRouteFailoverTarget) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddRouteFailoverTargetIDs(ids...)
+}
+
 // Mutation returns the APIKeyMutation object of the builder.
 func (_u *APIKeyUpdateOne) Mutation() *APIKeyMutation {
 	return _u.mutation
@@ -1286,6 +1477,27 @@ func (_u *APIKeyUpdateOne) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveUsageLogIDs(ids...)
+}
+
+// ClearRouteFailoverTargets clears all "route_failover_targets" edges to the APIKeyRouteFailoverTarget entity.
+func (_u *APIKeyUpdateOne) ClearRouteFailoverTargets() *APIKeyUpdateOne {
+	_u.mutation.ClearRouteFailoverTargets()
+	return _u
+}
+
+// RemoveRouteFailoverTargetIDs removes the "route_failover_targets" edge to APIKeyRouteFailoverTarget entities by IDs.
+func (_u *APIKeyUpdateOne) RemoveRouteFailoverTargetIDs(ids ...int64) *APIKeyUpdateOne {
+	_u.mutation.RemoveRouteFailoverTargetIDs(ids...)
+	return _u
+}
+
+// RemoveRouteFailoverTargets removes "route_failover_targets" edges to APIKeyRouteFailoverTarget entities.
+func (_u *APIKeyUpdateOne) RemoveRouteFailoverTargets(v ...*APIKeyRouteFailoverTarget) *APIKeyUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveRouteFailoverTargetIDs(ids...)
 }
 
 // Where appends a list predicates to the APIKeyUpdate builder.
@@ -1412,6 +1624,18 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(apikey.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.RouteConfigVersion(); ok {
+		_spec.SetField(apikey.FieldRouteConfigVersion, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRouteConfigVersion(); ok {
+		_spec.AddField(apikey.FieldRouteConfigVersion, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.FailoverRiskAcknowledgedAt(); ok {
+		_spec.SetField(apikey.FieldFailoverRiskAcknowledgedAt, field.TypeTime, value)
+	}
+	if _u.mutation.FailoverRiskAcknowledgedAtCleared() {
+		_spec.ClearField(apikey.FieldFailoverRiskAcknowledgedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.LastUsedAt(); ok {
 		_spec.SetField(apikey.FieldLastUsedAt, field.TypeTime, value)
@@ -1609,6 +1833,51 @@ func (_u *APIKeyUpdateOne) sqlSave(ctx context.Context) (_node *APIKey, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(usagelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.RouteFailoverTargetsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedRouteFailoverTargetsIDs(); len(nodes) > 0 && !_u.mutation.RouteFailoverTargetsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RouteFailoverTargetsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   apikey.RouteFailoverTargetsTable,
+			Columns: []string{apikey.RouteFailoverTargetsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(apikeyroutefailovertarget.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

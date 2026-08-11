@@ -71,6 +71,19 @@ func (UsageLog) Fields() []ent.Field {
 		field.Int64("group_id").
 			Optional().
 			Nillable(),
+		field.Int64("source_group_id").
+			Optional().
+			Nillable(),
+		field.Bool("route_fallback_used").
+			Default(false),
+		field.Int16("route_attempt_count").
+			Default(1),
+		field.String("route_fallback_reason").
+			MaxLen(64).
+			Optional().
+			Nillable(),
+		field.Bool("route_sticky_hit").
+			Default(false),
 		field.Int64("subscription_id").
 			Optional().
 			Nillable(),

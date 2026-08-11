@@ -183,6 +183,76 @@ func (_c *UsageLogCreate) SetNillableGroupID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetSourceGroupID sets the "source_group_id" field.
+func (_c *UsageLogCreate) SetSourceGroupID(v int64) *UsageLogCreate {
+	_c.mutation.SetSourceGroupID(v)
+	return _c
+}
+
+// SetNillableSourceGroupID sets the "source_group_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableSourceGroupID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetSourceGroupID(*v)
+	}
+	return _c
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (_c *UsageLogCreate) SetRouteFallbackUsed(v bool) *UsageLogCreate {
+	_c.mutation.SetRouteFallbackUsed(v)
+	return _c
+}
+
+// SetNillableRouteFallbackUsed sets the "route_fallback_used" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableRouteFallbackUsed(v *bool) *UsageLogCreate {
+	if v != nil {
+		_c.SetRouteFallbackUsed(*v)
+	}
+	return _c
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (_c *UsageLogCreate) SetRouteAttemptCount(v int16) *UsageLogCreate {
+	_c.mutation.SetRouteAttemptCount(v)
+	return _c
+}
+
+// SetNillableRouteAttemptCount sets the "route_attempt_count" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableRouteAttemptCount(v *int16) *UsageLogCreate {
+	if v != nil {
+		_c.SetRouteAttemptCount(*v)
+	}
+	return _c
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (_c *UsageLogCreate) SetRouteFallbackReason(v string) *UsageLogCreate {
+	_c.mutation.SetRouteFallbackReason(v)
+	return _c
+}
+
+// SetNillableRouteFallbackReason sets the "route_fallback_reason" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableRouteFallbackReason(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetRouteFallbackReason(*v)
+	}
+	return _c
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (_c *UsageLogCreate) SetRouteStickyHit(v bool) *UsageLogCreate {
+	_c.mutation.SetRouteStickyHit(v)
+	return _c
+}
+
+// SetNillableRouteStickyHit sets the "route_sticky_hit" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableRouteStickyHit(v *bool) *UsageLogCreate {
+	if v != nil {
+		_c.SetRouteStickyHit(*v)
+	}
+	return _c
+}
+
 // SetSubscriptionID sets the "subscription_id" field.
 func (_c *UsageLogCreate) SetSubscriptionID(v int64) *UsageLogCreate {
 	_c.mutation.SetSubscriptionID(v)
@@ -697,6 +767,18 @@ func (_c *UsageLogCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *UsageLogCreate) defaults() {
+	if _, ok := _c.mutation.RouteFallbackUsed(); !ok {
+		v := usagelog.DefaultRouteFallbackUsed
+		_c.mutation.SetRouteFallbackUsed(v)
+	}
+	if _, ok := _c.mutation.RouteAttemptCount(); !ok {
+		v := usagelog.DefaultRouteAttemptCount
+		_c.mutation.SetRouteAttemptCount(v)
+	}
+	if _, ok := _c.mutation.RouteStickyHit(); !ok {
+		v := usagelog.DefaultRouteStickyHit
+		_c.mutation.SetRouteStickyHit(v)
+	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		v := usagelog.DefaultInputTokens
 		_c.mutation.SetInputTokens(v)
@@ -835,6 +917,20 @@ func (_c *UsageLogCreate) check() error {
 		if err := usagelog.BillingModeValidator(v); err != nil {
 			return &ValidationError{Name: "billing_mode", err: fmt.Errorf(`ent: validator failed for field "UsageLog.billing_mode": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.RouteFallbackUsed(); !ok {
+		return &ValidationError{Name: "route_fallback_used", err: errors.New(`ent: missing required field "UsageLog.route_fallback_used"`)}
+	}
+	if _, ok := _c.mutation.RouteAttemptCount(); !ok {
+		return &ValidationError{Name: "route_attempt_count", err: errors.New(`ent: missing required field "UsageLog.route_attempt_count"`)}
+	}
+	if v, ok := _c.mutation.RouteFallbackReason(); ok {
+		if err := usagelog.RouteFallbackReasonValidator(v); err != nil {
+			return &ValidationError{Name: "route_fallback_reason", err: fmt.Errorf(`ent: validator failed for field "UsageLog.route_fallback_reason": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.RouteStickyHit(); !ok {
+		return &ValidationError{Name: "route_sticky_hit", err: errors.New(`ent: missing required field "UsageLog.route_sticky_hit"`)}
 	}
 	if _, ok := _c.mutation.InputTokens(); !ok {
 		return &ValidationError{Name: "input_tokens", err: errors.New(`ent: missing required field "UsageLog.input_tokens"`)}
@@ -1006,6 +1102,26 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingMode(); ok {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
+	}
+	if value, ok := _c.mutation.SourceGroupID(); ok {
+		_spec.SetField(usagelog.FieldSourceGroupID, field.TypeInt64, value)
+		_node.SourceGroupID = &value
+	}
+	if value, ok := _c.mutation.RouteFallbackUsed(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackUsed, field.TypeBool, value)
+		_node.RouteFallbackUsed = value
+	}
+	if value, ok := _c.mutation.RouteAttemptCount(); ok {
+		_spec.SetField(usagelog.FieldRouteAttemptCount, field.TypeInt16, value)
+		_node.RouteAttemptCount = value
+	}
+	if value, ok := _c.mutation.RouteFallbackReason(); ok {
+		_spec.SetField(usagelog.FieldRouteFallbackReason, field.TypeString, value)
+		_node.RouteFallbackReason = &value
+	}
+	if value, ok := _c.mutation.RouteStickyHit(); ok {
+		_spec.SetField(usagelog.FieldRouteStickyHit, field.TypeBool, value)
+		_node.RouteStickyHit = value
 	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
@@ -1497,6 +1613,90 @@ func (u *UsageLogUpsert) UpdateGroupID() *UsageLogUpsert {
 // ClearGroupID clears the value of the "group_id" field.
 func (u *UsageLogUpsert) ClearGroupID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldGroupID)
+	return u
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsert) SetSourceGroupID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldSourceGroupID, v)
+	return u
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateSourceGroupID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldSourceGroupID)
+	return u
+}
+
+// AddSourceGroupID adds v to the "source_group_id" field.
+func (u *UsageLogUpsert) AddSourceGroupID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldSourceGroupID, v)
+	return u
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsert) ClearSourceGroupID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldSourceGroupID)
+	return u
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (u *UsageLogUpsert) SetRouteFallbackUsed(v bool) *UsageLogUpsert {
+	u.Set(usagelog.FieldRouteFallbackUsed, v)
+	return u
+}
+
+// UpdateRouteFallbackUsed sets the "route_fallback_used" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateRouteFallbackUsed() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldRouteFallbackUsed)
+	return u
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (u *UsageLogUpsert) SetRouteAttemptCount(v int16) *UsageLogUpsert {
+	u.Set(usagelog.FieldRouteAttemptCount, v)
+	return u
+}
+
+// UpdateRouteAttemptCount sets the "route_attempt_count" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateRouteAttemptCount() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldRouteAttemptCount)
+	return u
+}
+
+// AddRouteAttemptCount adds v to the "route_attempt_count" field.
+func (u *UsageLogUpsert) AddRouteAttemptCount(v int16) *UsageLogUpsert {
+	u.Add(usagelog.FieldRouteAttemptCount, v)
+	return u
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (u *UsageLogUpsert) SetRouteFallbackReason(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldRouteFallbackReason, v)
+	return u
+}
+
+// UpdateRouteFallbackReason sets the "route_fallback_reason" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateRouteFallbackReason() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldRouteFallbackReason)
+	return u
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (u *UsageLogUpsert) ClearRouteFallbackReason() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldRouteFallbackReason)
+	return u
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (u *UsageLogUpsert) SetRouteStickyHit(v bool) *UsageLogUpsert {
+	u.Set(usagelog.FieldRouteStickyHit, v)
+	return u
+}
+
+// UpdateRouteStickyHit sets the "route_sticky_hit" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateRouteStickyHit() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldRouteStickyHit)
 	return u
 }
 
@@ -2390,6 +2590,104 @@ func (u *UsageLogUpsertOne) UpdateGroupID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearGroupID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsertOne) SetSourceGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSourceGroupID(v)
+	})
+}
+
+// AddSourceGroupID adds v to the "source_group_id" field.
+func (u *UsageLogUpsertOne) AddSourceGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSourceGroupID(v)
+	})
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateSourceGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSourceGroupID()
+	})
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsertOne) ClearSourceGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSourceGroupID()
+	})
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (u *UsageLogUpsertOne) SetRouteFallbackUsed(v bool) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteFallbackUsed(v)
+	})
+}
+
+// UpdateRouteFallbackUsed sets the "route_fallback_used" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateRouteFallbackUsed() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteFallbackUsed()
+	})
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (u *UsageLogUpsertOne) SetRouteAttemptCount(v int16) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteAttemptCount(v)
+	})
+}
+
+// AddRouteAttemptCount adds v to the "route_attempt_count" field.
+func (u *UsageLogUpsertOne) AddRouteAttemptCount(v int16) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddRouteAttemptCount(v)
+	})
+}
+
+// UpdateRouteAttemptCount sets the "route_attempt_count" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateRouteAttemptCount() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteAttemptCount()
+	})
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (u *UsageLogUpsertOne) SetRouteFallbackReason(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteFallbackReason(v)
+	})
+}
+
+// UpdateRouteFallbackReason sets the "route_fallback_reason" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateRouteFallbackReason() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteFallbackReason()
+	})
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (u *UsageLogUpsertOne) ClearRouteFallbackReason() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearRouteFallbackReason()
+	})
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (u *UsageLogUpsertOne) SetRouteStickyHit(v bool) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteStickyHit(v)
+	})
+}
+
+// UpdateRouteStickyHit sets the "route_sticky_hit" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateRouteStickyHit() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteStickyHit()
 	})
 }
 
@@ -3546,6 +3844,104 @@ func (u *UsageLogUpsertBulk) UpdateGroupID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearGroupID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearGroupID()
+	})
+}
+
+// SetSourceGroupID sets the "source_group_id" field.
+func (u *UsageLogUpsertBulk) SetSourceGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSourceGroupID(v)
+	})
+}
+
+// AddSourceGroupID adds v to the "source_group_id" field.
+func (u *UsageLogUpsertBulk) AddSourceGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddSourceGroupID(v)
+	})
+}
+
+// UpdateSourceGroupID sets the "source_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateSourceGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSourceGroupID()
+	})
+}
+
+// ClearSourceGroupID clears the value of the "source_group_id" field.
+func (u *UsageLogUpsertBulk) ClearSourceGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSourceGroupID()
+	})
+}
+
+// SetRouteFallbackUsed sets the "route_fallback_used" field.
+func (u *UsageLogUpsertBulk) SetRouteFallbackUsed(v bool) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteFallbackUsed(v)
+	})
+}
+
+// UpdateRouteFallbackUsed sets the "route_fallback_used" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateRouteFallbackUsed() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteFallbackUsed()
+	})
+}
+
+// SetRouteAttemptCount sets the "route_attempt_count" field.
+func (u *UsageLogUpsertBulk) SetRouteAttemptCount(v int16) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteAttemptCount(v)
+	})
+}
+
+// AddRouteAttemptCount adds v to the "route_attempt_count" field.
+func (u *UsageLogUpsertBulk) AddRouteAttemptCount(v int16) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddRouteAttemptCount(v)
+	})
+}
+
+// UpdateRouteAttemptCount sets the "route_attempt_count" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateRouteAttemptCount() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteAttemptCount()
+	})
+}
+
+// SetRouteFallbackReason sets the "route_fallback_reason" field.
+func (u *UsageLogUpsertBulk) SetRouteFallbackReason(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteFallbackReason(v)
+	})
+}
+
+// UpdateRouteFallbackReason sets the "route_fallback_reason" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateRouteFallbackReason() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteFallbackReason()
+	})
+}
+
+// ClearRouteFallbackReason clears the value of the "route_fallback_reason" field.
+func (u *UsageLogUpsertBulk) ClearRouteFallbackReason() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearRouteFallbackReason()
+	})
+}
+
+// SetRouteStickyHit sets the "route_sticky_hit" field.
+func (u *UsageLogUpsertBulk) SetRouteStickyHit(v bool) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetRouteStickyHit(v)
+	})
+}
+
+// UpdateRouteStickyHit sets the "route_sticky_hit" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateRouteStickyHit() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateRouteStickyHit()
 	})
 }
 
