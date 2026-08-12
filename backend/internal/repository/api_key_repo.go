@@ -448,7 +448,7 @@ func (r *apiKeyRepository) UpdateWithRoute(
 			}
 		}
 
-		incrementVersion := route.ReplaceTargets || route.IncrementVersion
+		incrementVersion := route.ReplaceTargets || (fields.RouteConfig && route.IncrementVersion)
 		if incrementVersion || fields.RiskAcknowledgement {
 			builder := client.APIKey.Update().
 				Where(apikey.IDEQ(working.ID), apikey.DeletedAtIsNil()).
