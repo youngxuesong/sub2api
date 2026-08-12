@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/field"
 )
 
@@ -32,4 +33,15 @@ func TestAPIKeyRouteFailoverSchemaFields(t *testing.T) {
 	targetFields := fieldNames(targetSchemaFields)
 	require.Equal(t, []string{"api_key_id", "target_group_id", "priority"}, targetFields)
 	require.Equal(t, field.TypeInt16, targetSchemaFields[2].Descriptor().Info.Type)
+}
+
+func TestAPIKeyRouteFailoverTargetPriorityDatabaseCheck(t *testing.T) {
+	annotations := (schema.APIKeyRouteFailoverTarget{}).Annotations()
+	require.Len(t, annotations, 1)
+
+	annotation, ok := annotations[0].(entsql.Annotation)
+	require.True(t, ok, "expected an entsql annotation")
+	require.Equal(t, map[string]string{
+		"api_key_route_failover_targets_priority_check": "priority BETWEEN 1 AND 5",
+	}, annotation.Checks)
 }

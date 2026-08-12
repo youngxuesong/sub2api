@@ -18,7 +18,12 @@ type APIKeyRouteFailoverTarget struct {
 
 func (APIKeyRouteFailoverTarget) Annotations() []schema.Annotation {
 	return []schema.Annotation{
-		entsql.Annotation{Table: "api_key_route_failover_targets"},
+		entsql.Annotation{
+			Table: "api_key_route_failover_targets",
+			Checks: map[string]string{
+				"api_key_route_failover_targets_priority_check": "priority BETWEEN 1 AND 5",
+			},
+		},
 	}
 }
 

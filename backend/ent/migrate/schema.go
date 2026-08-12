@@ -2180,6 +2180,9 @@ func init() {
 	APIKeyRouteFailoverTargetsTable.Annotation = &entsql.Annotation{
 		Table: "api_key_route_failover_targets",
 	}
+	APIKeyRouteFailoverTargetsTable.Annotation.Checks = map[string]string{
+		"api_key_route_failover_targets_priority_check": "priority BETWEEN 1 AND 5",
+	}
 	AccountsTable.ForeignKeys[0].RefTable = ProxiesTable
 	AccountsTable.ForeignKeys[1].RefTable = AccountsTable
 	AccountsTable.Annotation = &entsql.Annotation{
