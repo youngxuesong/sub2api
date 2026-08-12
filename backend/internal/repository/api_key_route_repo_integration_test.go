@@ -116,6 +116,45 @@ func TestAPIKeyRepositoryUpdateWithRouteReplacesAndIncrementsVersion(t *testing.
 	require.Equal(t, []int64{f.groups[3]}, fallbackGroupIDs(loaded))
 }
 
+func TestAPIKeyRepositoryUpdateWithRouteRollsBackOnTargetInsertFailure(t *testing.T) {
+	f := newAPIKeyRouteRepoFixture(t, 3)
+	key := f.newKey("rollback", f.groups[0])
+	require.NoError(t, f.repo.CreateWithRoute(f.ctx, key, []int64{f.groups[1], f.groups[2]}))
+
+	key.Name = "changed inside transaction"
+	err := f.repo.UpdateWithRoute(f.ctx, key, service.APIKeyUpdateFields{
+		Name:        true,
+		RouteConfig: true,
+	}, service.APIKeyRouteMutation{
+		ReplaceTargets:   true,
+		TargetGroupIDs:   []int64{f.groups[1], f.groups[1]},
+		IncrementVersion: true,
+	})
+	require.Error(t, err)
+
+	loaded, loadErr := f.repo.GetByID(f.ctx, key.ID)
+	require.NoError(t, loadErr)
+	require.Equal(t, "rollback", loaded.Name)
+	require.Equal(t, int64(1), loaded.RouteConfigVersion)
+	require.Equal(t, []int64{f.groups[1], f.groups[2]}, fallbackGroupIDs(loaded))
+}
+
+func TestAPIKeyRepositoryRouteUsesOuterEntTransaction(t *testing.T) {
+	f := newAPIKeyRouteRepoFixture(t, 2)
+	tx := testEntTx(t)
+	txCtx := dbent.NewTxContext(f.ctx, tx)
+	txRepo := newAPIKeyRepositoryWithSQL(tx.Client(), integrationDB)
+	key := f.newKey("outer-tx", f.groups[0])
+
+	require.NoError(t, txRepo.CreateWithRoute(txCtx, key, []int64{f.groups[1]}))
+	_, err := f.repo.GetByKey(f.ctx, key.Key)
+	require.ErrorIs(t, err, service.ErrAPIKeyNotFound)
+
+	require.NoError(t, tx.Rollback())
+	_, err = f.repo.GetByKey(f.ctx, key.Key)
+	require.ErrorIs(t, err, service.ErrAPIKeyNotFound)
+}
+
 func TestAPIKeyRepositoryLoadsTargetsInPriorityOrder(t *testing.T) {
 	f := newAPIKeyRouteRepoFixture(t, 4)
 	key := f.newKey("loads", f.groups[0])
@@ -129,14 +168,34 @@ func TestAPIKeyRepositoryLoadsTargetsInPriorityOrder(t *testing.T) {
 	byKey, err := f.repo.GetByKeyForAuth(f.ctx, key.Key)
 	require.NoError(t, err)
 	require.Equal(t, want, fallbackGroupIDs(byKey))
-	for _, target := range byKey.FallbackTargets {
+	for i, target := range byKey.FallbackTargets {
 		require.NotNil(t, target.Group)
+		require.Equal(t, i+1, target.Priority)
 	}
 
 	listed, _, err := f.repo.ListByUserID(f.ctx, f.userID, pagination.PaginationParams{Page: 1, PageSize: 10}, service.APIKeyListFilters{})
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
 	require.Equal(t, want, fallbackGroupIDs(&listed[0]))
+
+	byFullKey, err := f.repo.GetByKey(f.ctx, key.Key)
+	require.NoError(t, err)
+	require.Equal(t, want, fallbackGroupIDs(byFullKey))
+
+	all, err := f.repo.ListAllByUserID(f.ctx, f.userID, service.APIKeyListFilters{})
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	require.Equal(t, want, fallbackGroupIDs(&all[0]))
+
+	byGroup, _, err := f.repo.ListByGroupID(f.ctx, f.groups[0], pagination.PaginationParams{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Len(t, byGroup, 1)
+	require.Equal(t, want, fallbackGroupIDs(&byGroup[0]))
+
+	searched, err := f.repo.SearchAPIKeys(f.ctx, f.userID, "loads", 10)
+	require.NoError(t, err)
+	require.Len(t, searched, 1)
+	require.Equal(t, want, fallbackGroupIDs(&searched[0]))
 }
 
 func TestAPIKeyRepositoryListKeysByGroupIDIncludesFallbackReferences(t *testing.T) {
