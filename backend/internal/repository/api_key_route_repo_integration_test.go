@@ -99,6 +99,46 @@ func TestAPIKeyRepositoryCreateWithRouteIsAtomic(t *testing.T) {
 	require.False(t, exists)
 }
 
+func TestAPIKeyRepositoryCreateWithRouteDoesNotMutateCallerBeforeCommit(t *testing.T) {
+	f := newAPIKeyRouteRepoFixture(t, 2)
+	key := f.newKey("commit-failure", f.groups[0])
+	before := *key
+	functionName := "fail_api_key_route_commit_" + f.suffix
+	triggerName := "fail_api_key_route_commit_trigger_" + f.suffix
+
+	_, err := integrationDB.ExecContext(f.ctx, fmt.Sprintf(`
+CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'forced deferred API key route failure';
+END;
+$$`, functionName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), fmt.Sprintf(
+			"DROP TRIGGER IF EXISTS %s ON api_keys", triggerName,
+		))
+		_, _ = integrationDB.ExecContext(context.Background(), fmt.Sprintf(
+			"DROP FUNCTION IF EXISTS %s()", functionName,
+		))
+	})
+	_, err = integrationDB.ExecContext(f.ctx, fmt.Sprintf(`
+CREATE CONSTRAINT TRIGGER %s
+AFTER INSERT ON api_keys
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN (NEW.key = '%s')
+EXECUTE FUNCTION %s()`, triggerName, key.Key, functionName))
+	require.NoError(t, err)
+
+	err = f.repo.CreateWithRoute(f.ctx, key, []int64{f.groups[1]})
+	require.Error(t, err)
+	require.Equal(t, before, *key)
+
+	exists, existsErr := f.repo.ExistsByKey(f.ctx, key.Key)
+	require.NoError(t, existsErr)
+	require.False(t, exists)
+}
+
 func TestAPIKeyRepositoryUpdateWithRouteReplacesAndIncrementsVersion(t *testing.T) {
 	f := newAPIKeyRouteRepoFixture(t, 4)
 	key := f.newKey("update", f.groups[0])
@@ -114,6 +154,25 @@ func TestAPIKeyRepositoryUpdateWithRouteReplacesAndIncrementsVersion(t *testing.
 	require.NoError(t, err)
 	require.Equal(t, int64(2), loaded.RouteConfigVersion)
 	require.Equal(t, []int64{f.groups[3]}, fallbackGroupIDs(loaded))
+}
+
+func TestAPIKeyRepositoryUpdateWithRouteReplacementAlwaysIncrementsVersion(t *testing.T) {
+	f := newAPIKeyRouteRepoFixture(t, 3)
+	key := f.newKey("implicit-version", f.groups[0])
+	require.NoError(t, f.repo.CreateWithRoute(f.ctx, key, []int64{f.groups[1]}))
+
+	// ReplaceTargets is the repository boundary's indication that the route
+	// configuration changed; callers must not be able to accidentally skip the
+	// version bump by omitting IncrementVersion.
+	require.NoError(t, f.repo.UpdateWithRoute(f.ctx, key, service.APIKeyUpdateFields{}, service.APIKeyRouteMutation{
+		ReplaceTargets: true,
+		TargetGroupIDs: []int64{f.groups[2]},
+	}))
+
+	loaded, err := f.repo.GetByID(f.ctx, key.ID)
+	require.NoError(t, err)
+	require.Equal(t, int64(2), loaded.RouteConfigVersion)
+	require.Equal(t, []int64{f.groups[2]}, fallbackGroupIDs(loaded))
 }
 
 func TestAPIKeyRepositoryUpdateWithRouteRollsBackOnTargetInsertFailure(t *testing.T) {
@@ -143,16 +202,68 @@ func TestAPIKeyRepositoryRouteUsesOuterEntTransaction(t *testing.T) {
 	f := newAPIKeyRouteRepoFixture(t, 2)
 	tx := testEntTx(t)
 	txCtx := dbent.NewTxContext(f.ctx, tx)
-	txRepo := newAPIKeyRepositoryWithSQL(tx.Client(), integrationDB)
+	// Use the normal repository client. The transaction is supplied only via
+	// context, which is how production callers compose repository operations.
+	txRepo := NewAPIKeyRepository(f.client, integrationDB).(*apiKeyRepository)
 	key := f.newKey("outer-tx", f.groups[0])
 
 	require.NoError(t, txRepo.CreateWithRoute(txCtx, key, []int64{f.groups[1]}))
 	_, err := f.repo.GetByKey(f.ctx, key.Key)
 	require.ErrorIs(t, err, service.ErrAPIKeyNotFound)
 
-	require.NoError(t, tx.Rollback())
-	_, err = f.repo.GetByKey(f.ctx, key.Key)
-	require.ErrorIs(t, err, service.ErrAPIKeyNotFound)
+	require.NoError(t, tx.Commit())
+	loaded, err := f.repo.GetByKey(f.ctx, key.Key)
+	require.NoError(t, err)
+	require.Equal(t, key.ID, loaded.ID)
+}
+
+func TestAPIKeyRepositoryUpdateWithRouteDoesNotMutateCallerOnFailure(t *testing.T) {
+	f := newAPIKeyRouteRepoFixture(t, 3)
+	key := f.newKey("caller-snapshot", f.groups[0])
+	require.NoError(t, f.repo.CreateWithRoute(f.ctx, key, []int64{f.groups[1]}))
+	key.Name = "updated name"
+	before := *key
+	functionName := "fail_api_key_route_update_commit_" + f.suffix
+	triggerName := "fail_api_key_route_update_commit_trigger_" + f.suffix
+
+	_, err := integrationDB.ExecContext(f.ctx, fmt.Sprintf(`
+CREATE FUNCTION %s() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'forced deferred API key route update failure';
+END;
+$$`, functionName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, _ = integrationDB.ExecContext(context.Background(), fmt.Sprintf(
+			"DROP TRIGGER IF EXISTS %s ON api_keys", triggerName,
+		))
+		_, _ = integrationDB.ExecContext(context.Background(), fmt.Sprintf(
+			"DROP FUNCTION IF EXISTS %s()", functionName,
+		))
+	})
+	_, err = integrationDB.ExecContext(f.ctx, fmt.Sprintf(`
+CREATE CONSTRAINT TRIGGER %s
+AFTER UPDATE ON api_keys
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+WHEN (NEW.id = %d)
+EXECUTE FUNCTION %s()`, triggerName, key.ID, functionName))
+	require.NoError(t, err)
+
+	err = f.repo.UpdateWithRoute(f.ctx, key, service.APIKeyUpdateFields{
+		Name:        true,
+		RouteConfig: true,
+	}, service.APIKeyRouteMutation{
+		ReplaceTargets:   true,
+		TargetGroupIDs:   []int64{f.groups[2]},
+		IncrementVersion: true,
+	})
+	require.Error(t, err)
+	require.Equal(t, before.ID, key.ID)
+	require.Equal(t, before.Name, key.Name)
+	require.Equal(t, before.UpdatedAt, key.UpdatedAt)
+	require.Equal(t, before.RouteConfigVersion, key.RouteConfigVersion)
+	require.Equal(t, before.FallbackTargets, key.FallbackTargets)
 }
 
 func TestAPIKeyRepositoryLoadsTargetsInPriorityOrder(t *testing.T) {

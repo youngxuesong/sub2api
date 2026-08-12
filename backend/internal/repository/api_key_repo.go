@@ -103,7 +103,8 @@ func applyCreatedAPIKey(key *service.APIKey, created *dbent.APIKey) {
 }
 
 func (r *apiKeyRepository) CreateWithRoute(ctx context.Context, key *service.APIKey, targetGroupIDs []int64) error {
-	return r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
+	var staged *service.APIKey
+	err := r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
 		created, err := buildAPIKeyCreate(client, key).Save(txCtx)
 		if err != nil {
 			return translatePersistenceError(err, nil, service.ErrAPIKeyExists)
@@ -116,9 +117,14 @@ func (r *apiKeyRepository) CreateWithRoute(ctx context.Context, key *service.API
 		if err != nil {
 			return err
 		}
-		*key = *apiKeyEntityToService(loaded)
+		staged = apiKeyEntityToService(loaded)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	*key = *staged
+	return nil
 }
 
 func createAPIKeyRouteTargets(ctx context.Context, client *dbent.Client, apiKeyID int64, targetGroupIDs []int64) error {
@@ -430,21 +436,24 @@ func (r *apiKeyRepository) UpdateWithRoute(
 	fields service.APIKeyUpdateFields,
 	route service.APIKeyRouteMutation,
 ) error {
-	return r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
+	working := *key
+	var staged *service.APIKey
+	err := r.withRouteTransaction(ctx, func(txCtx context.Context, client *dbent.Client) error {
 		baseFields := fields
 		baseFields.RouteConfig = false
 		baseFields.RiskAcknowledgement = false
 		if !baseFields.IsEmpty() {
-			if err := r.Update(txCtx, key, baseFields); err != nil {
+			if err := r.Update(txCtx, &working, baseFields); err != nil {
 				return err
 			}
 		}
 
-		if fields.RouteConfig || fields.RiskAcknowledgement {
+		incrementVersion := route.ReplaceTargets || route.IncrementVersion
+		if incrementVersion || fields.RiskAcknowledgement {
 			builder := client.APIKey.Update().
-				Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
+				Where(apikey.IDEQ(working.ID), apikey.DeletedAtIsNil()).
 				SetUpdatedAt(time.Now())
-			if fields.RouteConfig && route.IncrementVersion {
+			if incrementVersion {
 				builder.AddRouteConfigVersion(1)
 			}
 			if fields.RiskAcknowledgement {
@@ -465,25 +474,30 @@ func (r *apiKeyRepository) UpdateWithRoute(
 
 		if route.ReplaceTargets {
 			if _, err := client.APIKeyRouteFailoverTarget.Delete().
-				Where(apikeyroutefailovertarget.APIKeyIDEQ(key.ID)).
+				Where(apikeyroutefailovertarget.APIKeyIDEQ(working.ID)).
 				Exec(txCtx); err != nil {
 				return err
 			}
-			if err := createAPIKeyRouteTargets(txCtx, client, key.ID, route.TargetGroupIDs); err != nil {
+			if err := createAPIKeyRouteTargets(txCtx, client, working.ID, route.TargetGroupIDs); err != nil {
 				return err
 			}
 		}
 
-		loaded, err := apiKeyByIDQuery(client, key.ID).Only(txCtx)
+		loaded, err := apiKeyByIDQuery(client, working.ID).Only(txCtx)
 		if err != nil {
 			if dbent.IsNotFound(err) {
 				return service.ErrAPIKeyNotFound
 			}
 			return err
 		}
-		*key = *apiKeyEntityToService(loaded)
+		staged = apiKeyEntityToService(loaded)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	*key = *staged
+	return nil
 }
 
 func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {
