@@ -653,6 +653,11 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		ReasoningEffort:           l.ReasoningEffort,
 		InboundEndpoint:           l.InboundEndpoint,
 		GroupID:                   l.GroupID,
+		SourceGroupID:             l.SourceGroupID,
+		RouteFallbackUsed:         l.RouteFallbackUsed,
+		RouteAttemptCount:         l.RouteAttemptCount,
+		RouteFallbackReason:       l.RouteFallbackReason,
+		RouteStickyHit:            l.RouteStickyHit,
 		SubscriptionID:            l.SubscriptionID,
 		InputTokens:               l.InputTokens,
 		OutputTokens:              l.OutputTokens,
@@ -694,6 +699,7 @@ func usageLogFromServiceUser(l *service.UsageLog) UsageLog {
 		User:                      UserFromServiceShallow(l.User),
 		APIKey:                    APIKeyFromService(l.APIKey),
 		Group:                     GroupFromServiceShallow(l.Group),
+		SourceGroup:               GroupFromServiceShallow(l.SourceGroup),
 		Subscription:              UserSubscriptionFromService(l.Subscription),
 	}
 }

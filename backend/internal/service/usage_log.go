@@ -139,8 +139,13 @@ type UsageLog struct {
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
 
-	GroupID        *int64
-	SubscriptionID *int64
+	GroupID             *int64
+	SourceGroupID       *int64
+	RouteFallbackUsed   bool
+	RouteAttemptCount   int
+	RouteFallbackReason *string
+	RouteStickyHit      bool
+	SubscriptionID      *int64
 
 	InputTokens         int
 	OutputTokens        int
@@ -204,7 +209,32 @@ type UsageLog struct {
 	APIKey       *APIKey
 	Account      *Account
 	Group        *Group
+	SourceGroup  *Group
 	Subscription *UserSubscription
+}
+
+// ApplyRouteUsageAudit stores a request's immutable route outcome. For a
+// primary-only request the effective group is also the source group.
+func (u *UsageLog) ApplyRouteUsageAudit(audit RouteUsageAudit) {
+	if u == nil {
+		return
+	}
+	u.RouteFallbackUsed = audit.FallbackUsed
+	u.RouteAttemptCount = audit.AttemptCount
+	if u.RouteAttemptCount <= 0 {
+		u.RouteAttemptCount = 1
+	}
+	u.RouteStickyHit = audit.StickyHit
+	if audit.SourceGroupID != nil {
+		value := *audit.SourceGroupID
+		u.SourceGroupID = &value
+	} else if u.GroupID != nil {
+		value := *u.GroupID
+		u.SourceGroupID = &value
+	}
+	if reason := strings.TrimSpace(audit.FallbackReason); reason != "" {
+		u.RouteFallbackReason = &reason
+	}
 }
 
 func (u *UsageLog) TotalTokens() int {

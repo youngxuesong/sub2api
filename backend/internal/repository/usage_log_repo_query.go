@@ -19,7 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, upstream_response_model, upstream_model_mismatch, group_id, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, session_id, created_at"
+const usageLogSelectColumns = "id, user_id, api_key_id, account_id, request_id, model, requested_model, upstream_model, upstream_response_model, upstream_model_mismatch, group_id, source_group_id, route_fallback_used, route_attempt_count, route_fallback_reason, route_sticky_hit, subscription_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens, cache_creation_5m_tokens, cache_creation_1h_tokens, image_output_tokens, image_output_cost, image_input_tokens, image_input_cost, input_cost, output_cost, cache_creation_cost, cache_read_cost, total_cost, actual_cost, rate_multiplier, account_rate_multiplier, billing_type, request_type, stream, openai_ws_mode, duration_ms, first_token_ms, user_agent, ip_address, image_count, image_size, image_input_size, image_output_size, image_size_source, image_size_breakdown, video_count, video_resolution, video_duration_seconds, service_tier, reasoning_effort, inbound_endpoint, upstream_endpoint, cache_ttl_overridden, long_context_billing_applied, channel_id, model_mapping_chain, billing_tier, billing_mode, account_stats_cost, session_id, created_at"
 
 func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *service.UsageLog, err error) {
 	query := "SELECT " + usageLogSelectColumns + " FROM usage_logs WHERE id = $1"
@@ -48,6 +48,11 @@ func (r *usageLogRepository) GetByID(ctx context.Context, id int64) (log *servic
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	logs := []service.UsageLog{*log}
+	if err = r.hydrateUsageLogAssociations(ctx, logs); err != nil {
+		return nil, err
+	}
+	log = &logs[0]
 	return log, nil
 }
 
@@ -154,9 +159,6 @@ func (r *usageLogRepository) ListWithFilters(ctx context.Context, params paginat
 		return nil, nil, err
 	}
 
-	if err := r.hydrateUsageLogAssociations(ctx, logs); err != nil {
-		return nil, nil, err
-	}
 	return logs, page, nil
 }
 
@@ -268,6 +270,9 @@ func (r *usageLogRepository) queryUsageLogs(ctx context.Context, query string, a
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
+	if err = r.hydrateUsageLogAssociations(ctx, logs); err != nil {
+		return nil, err
+	}
 	return logs, nil
 }
 
@@ -314,6 +319,18 @@ func (r *usageLogRepository) hydrateUsageLogAssociations(ctx context.Context, lo
 				logs[i].Group = group
 			}
 		}
+		if logs[i].SourceGroupID == nil && logs[i].GroupID != nil {
+			value := *logs[i].GroupID
+			logs[i].SourceGroupID = &value
+		}
+		if logs[i].SourceGroupID != nil {
+			if group, ok := groups[*logs[i].SourceGroupID]; ok {
+				logs[i].SourceGroup = group
+			}
+		}
+		if logs[i].SourceGroup == nil && logs[i].SourceGroupID != nil && logs[i].GroupID != nil && *logs[i].SourceGroupID == *logs[i].GroupID {
+			logs[i].SourceGroup = logs[i].Group
+		}
 		if logs[i].SubscriptionID != nil {
 			if sub, ok := subs[*logs[i].SubscriptionID]; ok {
 				logs[i].Subscription = sub
@@ -346,6 +363,9 @@ func collectUsageLogIDs(logs []service.UsageLog) usageLogIDs {
 		accountIDs[logs[i].AccountID] = struct{}{}
 		if logs[i].GroupID != nil {
 			groupIDs[*logs[i].GroupID] = struct{}{}
+		}
+		if logs[i].SourceGroupID != nil {
+			groupIDs[*logs[i].SourceGroupID] = struct{}{}
 		}
 		if logs[i].SubscriptionID != nil {
 			subscriptionIDs[*logs[i].SubscriptionID] = struct{}{}
@@ -450,6 +470,11 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		upstreamResponseModel     sql.NullString
 		upstreamModelMismatch     sql.NullBool
 		groupID                   sql.NullInt64
+		sourceGroupID             sql.NullInt64
+		routeFallbackUsed         bool
+		routeAttemptCount         int
+		routeFallbackReason       sql.NullString
+		routeStickyHit            bool
 		subscriptionID            sql.NullInt64
 		inputTokens               int
 		outputTokens              int
@@ -513,6 +538,11 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		&upstreamResponseModel,
 		&upstreamModelMismatch,
 		&groupID,
+		&sourceGroupID,
+		&routeFallbackUsed,
+		&routeAttemptCount,
+		&routeFallbackReason,
+		&routeStickyHit,
 		&subscriptionID,
 		&inputTokens,
 		&outputTokens,
@@ -590,6 +620,9 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		TotalCost:                 totalCost,
 		ActualCost:                actualCost,
 		RateMultiplier:            rateMultiplier,
+		RouteFallbackUsed:         routeFallbackUsed,
+		RouteAttemptCount:         routeAttemptCount,
+		RouteStickyHit:            routeStickyHit,
 		AccountRateMultiplier:     nullFloat64Ptr(accountRateMultiplier),
 		BillingType:               int8(billingType),
 		RequestType:               service.RequestTypeFromInt16(requestTypeRaw),
@@ -611,6 +644,19 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 	if groupID.Valid {
 		value := groupID.Int64
 		log.GroupID = &value
+	}
+	if sourceGroupID.Valid {
+		value := sourceGroupID.Int64
+		log.SourceGroupID = &value
+	} else if log.GroupID != nil {
+		value := *log.GroupID
+		log.SourceGroupID = &value
+	}
+	if log.RouteAttemptCount <= 0 {
+		log.RouteAttemptCount = 1
+	}
+	if routeFallbackReason.Valid {
+		log.RouteFallbackReason = &routeFallbackReason.String
 	}
 	if subscriptionID.Valid {
 		value := subscriptionID.Int64

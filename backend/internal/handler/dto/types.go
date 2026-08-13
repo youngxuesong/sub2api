@@ -504,8 +504,13 @@ type UsageLog struct {
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
 
-	GroupID        *int64 `json:"group_id"`
-	SubscriptionID *int64 `json:"subscription_id"`
+	GroupID             *int64  `json:"group_id"`
+	SourceGroupID       *int64  `json:"source_group_id"`
+	RouteFallbackUsed   bool    `json:"route_fallback_used"`
+	RouteAttemptCount   int     `json:"route_attempt_count"`
+	RouteFallbackReason *string `json:"route_fallback_reason,omitempty"`
+	RouteStickyHit      bool    `json:"route_sticky_hit"`
+	SubscriptionID      *int64  `json:"subscription_id"`
 
 	InputTokens         int `json:"input_tokens"`
 	OutputTokens        int `json:"output_tokens"`
@@ -563,6 +568,7 @@ type UsageLog struct {
 	User         *User             `json:"user,omitempty"`
 	APIKey       *APIKey           `json:"api_key,omitempty"`
 	Group        *Group            `json:"group,omitempty"`
+	SourceGroup  *Group            `json:"source_group,omitempty"`
 	Subscription *UserSubscription `json:"subscription,omitempty"`
 }
 
