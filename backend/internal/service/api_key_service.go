@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"sort"
@@ -40,6 +41,14 @@ var (
 	ErrAPIKeyRateLimit5hExceeded = infraerrors.TooManyRequests("API_KEY_RATE_5H_EXCEEDED", "api key 5小时限额已用完")
 	ErrAPIKeyRateLimit1dExceeded = infraerrors.TooManyRequests("API_KEY_RATE_1D_EXCEEDED", "api key 日限额已用完")
 	ErrAPIKeyRateLimit7dExceeded = infraerrors.TooManyRequests("API_KEY_RATE_7D_EXCEEDED", "api key 7天限额已用完")
+
+	ErrFailoverAckRequired        = infraerrors.BadRequest("FAILOVER_ACK_REQUIRED", "failover billing risk acknowledgement is required")
+	ErrFailoverTooManyTargets     = infraerrors.BadRequest("FAILOVER_TOO_MANY_TARGETS", "at most five fallback groups are allowed")
+	ErrFailoverDuplicateTarget    = infraerrors.BadRequest("FAILOVER_DUPLICATE_TARGET", "fallback groups must be unique")
+	ErrFailoverPrimaryAsTarget    = infraerrors.BadRequest("FAILOVER_PRIMARY_AS_TARGET", "primary group cannot be a fallback group")
+	ErrFailoverTargetNotAllowed   = infraerrors.Forbidden("FAILOVER_TARGET_NOT_ALLOWED", "fallback group is not available to this user")
+	ErrFailoverTargetIncompatible = infraerrors.BadRequest("FAILOVER_TARGET_INCOMPATIBLE", "fallback group must be active, concrete, and use the primary platform")
+	ErrAPIKeyRouteConfigConflict  = infraerrors.Conflict("API_KEY_ROUTE_CONFIG_CONFLICT", "API key route configuration changed; retry the update")
 )
 
 const (
@@ -78,10 +87,14 @@ type APIKeyUpdateFields struct {
 	RouteConfig bool
 	// RiskAcknowledgement controls failover_risk_acknowledged_at updates.
 	RiskAcknowledgement bool
+	// RequireRouteConfigVersion makes the repository reject writes based on a
+	// stale route configuration snapshot. It is a guard, not a writable column.
+	RequireRouteConfigVersion bool
 }
 
 // IsEmpty 报告该次 Update 是否不写任何列。
 func (f APIKeyUpdateFields) IsEmpty() bool {
+	f.RequireRouteConfigVersion = false
 	return f == APIKeyUpdateFields{}
 }
 
@@ -233,6 +246,9 @@ type CreateAPIKeyRequest struct {
 	RateLimit5h float64 `json:"rate_limit_5h"`
 	RateLimit1d float64 `json:"rate_limit_1d"`
 	RateLimit7d float64 `json:"rate_limit_7d"`
+
+	FallbackGroupIDs         []int64 `json:"fallback_group_ids"`
+	FailoverRiskAcknowledged bool    `json:"failover_risk_acknowledged"`
 }
 
 // UpdateAPIKeyRequest 更新API Key请求
@@ -254,6 +270,9 @@ type UpdateAPIKeyRequest struct {
 	RateLimit1d         *float64 `json:"rate_limit_1d"`
 	RateLimit7d         *float64 `json:"rate_limit_7d"`
 	ResetRateLimitUsage *bool    `json:"reset_rate_limit_usage"` // Reset all usage counters to 0
+
+	FallbackGroupIDs         *[]int64 `json:"fallback_group_ids"`
+	FailoverRiskAcknowledged bool     `json:"failover_risk_acknowledged"`
 }
 
 // APIKeyService API Key服务
@@ -428,13 +447,191 @@ func (s *APIKeyService) incrementAPIKeyErrorCount(ctx context.Context, userID in
 // 对于订阅类型分组：检查用户是否有有效订阅
 // 对于标准类型分组：使用原有的 AllowedGroups 和 IsExclusive 逻辑
 func (s *APIKeyService) canUserBindGroup(ctx context.Context, user *User, group *Group) bool {
+	if user == nil || group == nil {
+		return false
+	}
 	// 订阅类型分组：需要有效订阅
 	if group.IsSubscriptionType() {
+		if s.userSubRepo == nil {
+			return false
+		}
 		_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
 		return err == nil // 有有效订阅则允许
 	}
 	// 标准类型分组：使用原有逻辑
 	return user.CanBindGroup(group.ID, group.IsExclusive)
+}
+
+func (s *APIKeyService) canUserBindFallbackGroup(ctx context.Context, user *User, group *Group) (bool, error) {
+	if user == nil || group == nil {
+		return false, nil
+	}
+	if !group.IsSubscriptionType() {
+		return user.CanBindGroup(group.ID, group.IsExclusive), nil
+	}
+	if s.userSubRepo == nil {
+		return false, nil
+	}
+	_, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, user.ID, group.ID)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, ErrSubscriptionNotFound) {
+		return false, nil
+	}
+	return false, fmt.Errorf("get active fallback group subscription: %w", err)
+}
+
+func (s *APIKeyService) validateFallbackGroups(
+	ctx context.Context,
+	user *User,
+	primary *Group,
+	targetIDs []int64,
+) ([]APIKeyFailoverTarget, error) {
+	if len(targetIDs) > MaxAPIKeyFallbackGroups {
+		return nil, ErrFailoverTooManyTargets
+	}
+	if len(targetIDs) == 0 {
+		return []APIKeyFailoverTarget{}, nil
+	}
+
+	seen := make(map[int64]struct{}, len(targetIDs))
+	for _, targetID := range targetIDs {
+		if targetID <= 0 {
+			return nil, ErrFailoverTargetIncompatible
+		}
+		if _, exists := seen[targetID]; exists {
+			return nil, ErrFailoverDuplicateTarget
+		}
+		seen[targetID] = struct{}{}
+	}
+	if primary != nil {
+		for _, targetID := range targetIDs {
+			if targetID == primary.ID {
+				return nil, ErrFailoverPrimaryAsTarget
+			}
+		}
+	}
+	if !isConcreteRouteGroup(primary) {
+		return nil, ErrFailoverTargetIncompatible
+	}
+
+	targets := make([]APIKeyFailoverTarget, 0, len(targetIDs))
+	for i, targetID := range targetIDs {
+		group, err := s.groupRepo.GetByID(ctx, targetID)
+		if err != nil {
+			if errors.Is(err, ErrGroupNotFound) {
+				return nil, ErrFailoverTargetNotAllowed
+			}
+			return nil, fmt.Errorf("get fallback group %d: %w", targetID, err)
+		}
+		if group == nil {
+			return nil, ErrFailoverTargetNotAllowed
+		}
+		allowed, err := s.canUserBindFallbackGroup(ctx, user, group)
+		if err != nil {
+			return nil, err
+		}
+		if !allowed {
+			return nil, ErrFailoverTargetNotAllowed
+		}
+		if !isConcreteRouteGroup(group) || group.Platform != primary.Platform {
+			return nil, ErrFailoverTargetIncompatible
+		}
+
+		effectiveRate := group.RateMultiplier
+		if s.userGroupRateRepo != nil {
+			override, rateErr := s.userGroupRateRepo.GetByUserAndGroup(ctx, user.ID, group.ID)
+			if rateErr != nil {
+				return nil, fmt.Errorf("get fallback group rate: %w", rateErr)
+			}
+			if override != nil {
+				effectiveRate = *override
+			}
+		}
+
+		targets = append(targets, APIKeyFailoverTarget{
+			TargetGroupID:           group.ID,
+			Priority:                i + 1,
+			Group:                   group,
+			EffectiveRateMultiplier: effectiveRate,
+		})
+	}
+	return targets, nil
+}
+
+func attachValidatedFallbackTargets(key *APIKey, targets []APIKeyFailoverTarget) {
+	if key == nil {
+		return
+	}
+	key.FallbackTargets = append([]APIKeyFailoverTarget(nil), targets...)
+	for i := range key.FallbackTargets {
+		key.FallbackTargets[i].APIKeyID = key.ID
+	}
+}
+
+func (s *APIKeyService) loadFallbackTargetSnapshots(
+	ctx context.Context,
+	userID int64,
+	targets []APIKeyFailoverTarget,
+) ([]APIKeyFailoverTarget, error) {
+	if len(targets) == 0 {
+		return []APIKeyFailoverTarget{}, nil
+	}
+
+	resolved := make([]APIKeyFailoverTarget, 0, len(targets))
+	for _, target := range targets {
+		group, err := s.groupRepo.GetByID(ctx, target.TargetGroupID)
+		if err != nil {
+			return nil, fmt.Errorf("get fallback group %d: %w", target.TargetGroupID, err)
+		}
+		if group == nil {
+			return nil, fmt.Errorf("get fallback group %d: %w", target.TargetGroupID, ErrGroupNotFound)
+		}
+
+		effectiveRate := group.RateMultiplier
+		if s.userGroupRateRepo != nil {
+			override, rateErr := s.userGroupRateRepo.GetByUserAndGroup(ctx, userID, group.ID)
+			if rateErr != nil {
+				return nil, fmt.Errorf("get fallback group rate: %w", rateErr)
+			}
+			if override != nil {
+				effectiveRate = *override
+			}
+		}
+
+		target.Group = group
+		target.EffectiveRateMultiplier = effectiveRate
+		resolved = append(resolved, target)
+	}
+	return resolved, nil
+}
+
+func isConcreteRouteGroup(group *Group) bool {
+	return group != nil && group.IsActive() && group.Platform != "" && group.Platform != PlatformComposite
+}
+
+func apiKeyFallbackGroupIDs(key *APIKey) []int64 {
+	if key == nil || len(key.FallbackTargets) == 0 {
+		return []int64{}
+	}
+	ids := make([]int64, 0, len(key.FallbackTargets))
+	for _, target := range key.FallbackTargets {
+		ids = append(ids, target.TargetGroupID)
+	}
+	return ids
+}
+
+func equalInt64Slices(a, b []int64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Create 创建API Key
@@ -459,6 +656,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		}
 	}
 
+	var primaryGroup *Group
 	// 验证分组权限（如果指定了分组）
 	if req.GroupID != nil {
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
@@ -469,6 +667,19 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		// 检查用户是否可以绑定该分组
 		if !s.canUserBindGroup(ctx, user, group) {
 			return nil, ErrGroupNotAllowed
+		}
+		primaryGroup = group
+	}
+
+	var fallbackTargets []APIKeyFailoverTarget
+	if len(req.FallbackGroupIDs) > 0 {
+		var validateErr error
+		fallbackTargets, validateErr = s.validateFallbackGroups(ctx, user, primaryGroup, req.FallbackGroupIDs)
+		if validateErr != nil {
+			return nil, validateErr
+		}
+		if !req.FailoverRiskAcknowledged {
+			return nil, ErrFailoverAckRequired
 		}
 	}
 
@@ -509,18 +720,23 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 
 	// 创建API Key记录
 	apiKey := &APIKey{
-		UserID:      userID,
-		Key:         key,
-		Name:        html.EscapeString(req.Name),
-		GroupID:     req.GroupID,
-		Status:      StatusActive,
-		IPWhitelist: req.IPWhitelist,
-		IPBlacklist: req.IPBlacklist,
-		Quota:       req.Quota,
-		QuotaUsed:   0,
-		RateLimit5h: req.RateLimit5h,
-		RateLimit1d: req.RateLimit1d,
-		RateLimit7d: req.RateLimit7d,
+		UserID:          userID,
+		Key:             key,
+		Name:            html.EscapeString(req.Name),
+		GroupID:         req.GroupID,
+		Status:          StatusActive,
+		IPWhitelist:     req.IPWhitelist,
+		IPBlacklist:     req.IPBlacklist,
+		Quota:           req.Quota,
+		QuotaUsed:       0,
+		RateLimit5h:     req.RateLimit5h,
+		RateLimit1d:     req.RateLimit1d,
+		RateLimit7d:     req.RateLimit7d,
+		FallbackTargets: fallbackTargets,
+	}
+	if len(req.FallbackGroupIDs) > 0 {
+		now := time.Now()
+		apiKey.FailoverRiskAcknowledgedAt = &now
 	}
 
 	// Set expiration time if specified
@@ -529,8 +745,21 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 		apiKey.ExpiresAt = &expiresAt
 	}
 
-	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
-		return nil, fmt.Errorf("create api key: %w", err)
+	var createErr error
+	if len(req.FallbackGroupIDs) > 0 {
+		routeRepo, ok := s.apiKeyRepo.(APIKeyRouteRepository)
+		if !ok {
+			return nil, fmt.Errorf("create api key route: repository does not support APIKeyRouteRepository")
+		}
+		createErr = routeRepo.CreateWithRoute(ctx, apiKey, req.FallbackGroupIDs)
+	} else {
+		createErr = s.apiKeyRepo.Create(ctx, apiKey)
+	}
+	if createErr != nil {
+		return nil, fmt.Errorf("create api key: %w", createErr)
+	}
+	if len(req.FallbackGroupIDs) > 0 {
+		attachValidatedFallbackTargets(apiKey, fallbackTargets)
 	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)
@@ -764,6 +993,21 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	// 下面若干分支会顺带把 Status 改回 active（配额扩容、清除过期等），
 	// 所以用原始值比对来决定是否写 status，而不是只看 req.Status。
 	originalStatus := apiKey.Status
+	var routeMutation APIKeyRouteMutation
+	routeChanged := false
+	var routePrimary *Group
+	var routeUser *User
+	var validatedFallbackTargets []APIKeyFailoverTarget
+	var responseFallbackTargets []APIKeyFailoverTarget
+	oldFallbackIDs := apiKeyFallbackGroupIDs(apiKey)
+	primaryChanged := req.GroupID != nil && (apiKey.GroupID == nil || *apiKey.GroupID != *req.GroupID)
+
+	if req.GroupID != nil || req.FallbackGroupIDs != nil {
+		routeUser, err = s.userRepo.GetByID(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("get user: %w", err)
+		}
+	}
 
 	// 更新字段
 	if req.Name != nil {
@@ -772,23 +1016,57 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 	}
 
 	if req.GroupID != nil {
-		// 验证分组权限
-		user, err := s.userRepo.GetByID(ctx, userID)
-		if err != nil {
-			return nil, fmt.Errorf("get user: %w", err)
-		}
-
 		group, err := s.groupRepo.GetByID(ctx, *req.GroupID)
 		if err != nil {
 			return nil, fmt.Errorf("get group: %w", err)
 		}
 
-		if !s.canUserBindGroup(ctx, user, group) {
+		if !s.canUserBindGroup(ctx, routeUser, group) {
 			return nil, ErrGroupNotAllowed
 		}
 
 		apiKey.GroupID = req.GroupID
 		fields.GroupID = true
+		routePrimary = group
+	}
+
+	if req.FallbackGroupIDs != nil || primaryChanged {
+		if routePrimary == nil && apiKey.GroupID != nil {
+			routePrimary, err = s.groupRepo.GetByID(ctx, *apiKey.GroupID)
+			if err != nil {
+				return nil, fmt.Errorf("get group: %w", err)
+			}
+		}
+
+		newFallbackIDs := oldFallbackIDs
+		if req.FallbackGroupIDs != nil {
+			newFallbackIDs = append([]int64(nil), (*req.FallbackGroupIDs)...)
+		} else if primaryChanged {
+			newFallbackIDs = []int64{}
+		}
+		routeChanged = primaryChanged || !equalInt64Slices(oldFallbackIDs, newFallbackIDs)
+		if routeChanged {
+			if len(newFallbackIDs) > 0 {
+				validatedFallbackTargets, err = s.validateFallbackGroups(ctx, routeUser, routePrimary, newFallbackIDs)
+				if err != nil {
+					return nil, err
+				}
+				if !req.FailoverRiskAcknowledged {
+					return nil, ErrFailoverAckRequired
+				}
+			}
+			routeMutation.ReplaceTargets = true
+			routeMutation.TargetGroupIDs = newFallbackIDs
+			routeMutation.IncrementVersion = true
+			fields.RouteConfig = true
+			fields.RiskAcknowledgement = true
+			if len(newFallbackIDs) == 0 {
+				routeMutation.ClearRiskAcknowledgement = true
+			} else {
+				now := time.Now()
+				routeMutation.RiskAcknowledgedAt = &now
+			}
+		}
 	}
 
 	if req.Status != nil {
@@ -872,8 +1150,33 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 		fields.Status = true
 	}
 
-	if err := s.apiKeyRepo.Update(ctx, apiKey, fields); err != nil {
-		return nil, fmt.Errorf("update api key: %w", err)
+	if !routeChanged && len(apiKey.FallbackTargets) > 0 {
+		responseFallbackTargets, err = s.loadFallbackTargetSnapshots(ctx, userID, apiKey.FallbackTargets)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !fields.IsEmpty() || req.FallbackGroupIDs != nil {
+		fields.RequireRouteConfigVersion = true
+	}
+
+	var updateErr error
+	if routeChanged {
+		routeRepo, ok := s.apiKeyRepo.(APIKeyRouteRepository)
+		if !ok {
+			return nil, fmt.Errorf("update api key route: repository does not support APIKeyRouteRepository")
+		}
+		updateErr = routeRepo.UpdateWithRoute(ctx, apiKey, fields, routeMutation)
+	} else {
+		updateErr = s.apiKeyRepo.Update(ctx, apiKey, fields)
+	}
+	if updateErr != nil {
+		return nil, fmt.Errorf("update api key: %w", updateErr)
+	}
+	if routeChanged {
+		attachValidatedFallbackTargets(apiKey, validatedFallbackTargets)
+	} else if responseFallbackTargets != nil {
+		attachValidatedFallbackTargets(apiKey, responseFallbackTargets)
 	}
 
 	s.InvalidateAuthCacheByKey(ctx, apiKey.Key)

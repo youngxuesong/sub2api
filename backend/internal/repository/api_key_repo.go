@@ -320,7 +320,7 @@ func (r *apiKeyRepository) GetByKeyForAuth(ctx context.Context, key string) (*se
 
 func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fields service.APIKeyUpdateFields) error {
 	// 空掩码代表调用方不改任何列，直接返回，避免产生一次无意义的整行写。
-	if fields.IsEmpty() {
+	if fields.IsEmpty() && !fields.RequireRouteConfigVersion {
 		return nil
 	}
 
@@ -334,6 +334,9 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 	builder := client.APIKey.Update().
 		Where(apikey.IDEQ(key.ID), apikey.DeletedAtIsNil()).
 		SetUpdatedAt(now)
+	if fields.RequireRouteConfigVersion {
+		builder.Where(apikey.RouteConfigVersionEQ(key.RouteConfigVersion))
+	}
 	if fields.Name {
 		builder.SetName(key.Name)
 	}
@@ -421,6 +424,9 @@ func (r *apiKeyRepository) Update(ctx context.Context, key *service.APIKey, fiel
 		return err
 	}
 	if affected == 0 {
+		if fields.RequireRouteConfigVersion {
+			return classifyAPIKeyRouteVersionMiss(ctx, client, key.ID)
+		}
 		// 更新影响行数为 0，说明记录不存在或已被软删除。
 		return service.ErrAPIKeyNotFound
 	}
@@ -453,6 +459,9 @@ func (r *apiKeyRepository) UpdateWithRoute(
 			builder := client.APIKey.Update().
 				Where(apikey.IDEQ(working.ID), apikey.DeletedAtIsNil()).
 				SetUpdatedAt(time.Now())
+			if fields.RequireRouteConfigVersion {
+				builder.Where(apikey.RouteConfigVersionEQ(working.RouteConfigVersion))
+			}
 			if incrementVersion {
 				builder.AddRouteConfigVersion(1)
 			}
@@ -468,6 +477,9 @@ func (r *apiKeyRepository) UpdateWithRoute(
 				return err
 			}
 			if affected == 0 {
+				if fields.RequireRouteConfigVersion {
+					return classifyAPIKeyRouteVersionMiss(txCtx, client, working.ID)
+				}
 				return service.ErrAPIKeyNotFound
 			}
 		}
@@ -498,6 +510,19 @@ func (r *apiKeyRepository) UpdateWithRoute(
 	}
 	*key = *staged
 	return nil
+}
+
+func classifyAPIKeyRouteVersionMiss(ctx context.Context, client *dbent.Client, id int64) error {
+	exists, err := client.APIKey.Query().
+		Where(apikey.IDEQ(id), apikey.DeletedAtIsNil()).
+		Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return service.ErrAPIKeyNotFound
+	}
+	return service.ErrAPIKeyRouteConfigConflict
 }
 
 func (r *apiKeyRepository) Delete(ctx context.Context, id int64) error {

@@ -756,6 +756,9 @@ func ProvideAPIKeyService(
 	billingCacheService *BillingCacheService,
 	concurrencyService *ConcurrencyService,
 ) *APIKeyService {
+	if _, ok := apiKeyRepo.(APIKeyRouteRepository); !ok {
+		panic("API key repository must implement APIKeyRouteRepository")
+	}
 	svc := NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, userGroupRateRepo, cache, cfg)
 	svc.SetRateLimitCacheInvalidator(billingCacheService)
 	svc.SetConcurrencyService(concurrencyService)

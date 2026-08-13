@@ -54,22 +54,22 @@ func TestAPIKeyUpdate_OnlyDeclaresRequestedColumns(t *testing.T) {
 		{
 			name: "name only",
 			req:  UpdateAPIKeyRequest{Name: &name},
-			want: APIKeyUpdateFields{Name: true},
+			want: APIKeyUpdateFields{Name: true, RequireRouteConfigVersion: true},
 		},
 		{
 			name: "quota only",
 			req:  UpdateAPIKeyRequest{Quota: &quota},
-			want: APIKeyUpdateFields{Quota: true},
+			want: APIKeyUpdateFields{Quota: true, RequireRouteConfigVersion: true},
 		},
 		{
 			name: "rate limit threshold only",
 			req:  UpdateAPIKeyRequest{RateLimit5h: &rateLimit},
-			want: APIKeyUpdateFields{RateLimits: true},
+			want: APIKeyUpdateFields{RateLimits: true, RequireRouteConfigVersion: true},
 		},
 		{
 			name: "ip whitelist only",
 			req:  UpdateAPIKeyRequest{IPWhitelist: &whitelist},
-			want: APIKeyUpdateFields{IPRules: true},
+			want: APIKeyUpdateFields{IPRules: true, RequireRouteConfigVersion: true},
 		},
 	}
 
@@ -105,7 +105,7 @@ func TestAPIKeyUpdate_DeclaresUsageColumnsOnExplicitReset(t *testing.T) {
 		ResetRateLimitUsage: &reset,
 	})
 	require.NoError(t, err)
-	require.Equal(t, []APIKeyUpdateFields{{QuotaUsed: true, RateLimitUsage: true}}, repo.updateFields)
+	require.Equal(t, []APIKeyUpdateFields{{QuotaUsed: true, RateLimitUsage: true, RequireRouteConfigVersion: true}}, repo.updateFields)
 }
 
 // 配额扩容会顺带把 quota_exhausted 复活为 active，此时必须声明 status。
@@ -117,7 +117,7 @@ func TestAPIKeyUpdate_DeclaresStatusWhenReactivated(t *testing.T) {
 
 	_, err := svc.Update(context.Background(), 1, 7, UpdateAPIKeyRequest{Quota: &quota})
 	require.NoError(t, err)
-	require.Equal(t, []APIKeyUpdateFields{{Quota: true, Status: true}}, repo.updateFields)
+	require.Equal(t, []APIKeyUpdateFields{{Quota: true, Status: true, RequireRouteConfigVersion: true}}, repo.updateFields)
 }
 
 // 计费热路径把 Key 标记为配额耗尽时只写 status，
