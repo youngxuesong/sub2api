@@ -83,8 +83,20 @@ type APIKey struct {
 	Reset1dAt     *time.Time `json:"reset_1d_at,omitempty"`
 	Reset7dAt     *time.Time `json:"reset_7d_at,omitempty"`
 
-	User  *User  `json:"user,omitempty"`
-	Group *Group `json:"group,omitempty"`
+	User               *User                 `json:"user,omitempty"`
+	Group              *Group                `json:"group,omitempty"`
+	RouteConfigVersion int64                 `json:"route_config_version"`
+	FailoverEnabled    bool                  `json:"failover_enabled"`
+	FallbackGroups     []APIKeyFallbackGroup `json:"fallback_groups"`
+}
+
+type APIKeyFallbackGroup struct {
+	ID               int64   `json:"id"`
+	Name             string  `json:"name"`
+	Platform         string  `json:"platform"`
+	SubscriptionType string  `json:"subscription_type"`
+	RateMultiplier   float64 `json:"rate_multiplier"`
+	Priority         int     `json:"priority"`
 }
 
 type Group struct {

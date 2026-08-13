@@ -2,6 +2,39 @@ package service
 
 import "testing"
 
+func TestAPIKeyAuthSnapshotRoundTripsRouteTargets(t *testing.T) {
+	primaryID, firstID, secondID := int64(1), int64(2), int64(3)
+	firstRPM, secondRPM := 17, 29
+	apiKey := &APIKey{
+		ID: 10, UserID: 20, Key: "route-key", GroupID: &primaryID, RouteConfigVersion: 4,
+		User:  &User{ID: 20, Status: StatusActive, Role: RoleUser},
+		Group: &Group{ID: primaryID, Name: "primary", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1},
+		FallbackTargets: []APIKeyFailoverTarget{
+			{TargetGroupID: firstID, Priority: 1, Group: &Group{ID: firstID, Name: "first", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1.5, RPMLimit: 100}, UserGroupRPMOverride: &firstRPM},
+			{TargetGroupID: secondID, Priority: 2, Group: &Group{ID: secondID, Name: "second", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 2, AllowLive: true}, UserGroupRPMOverride: &secondRPM},
+		},
+	}
+
+	snapshot := (&APIKeyService{}).snapshotFromAPIKey(t.Context(), apiKey)
+	if snapshot.Version != apiKeyAuthSnapshotVersion || snapshot.RouteConfigVersion != 4 || len(snapshot.FallbackTargets) != 2 {
+		t.Fatalf("unexpected route snapshot: %#v", snapshot)
+	}
+	restored := (&APIKeyService{}).snapshotToAPIKey(apiKey.Key, snapshot)
+	if len(restored.FallbackTargets) != 2 || restored.FallbackTargets[0].TargetGroupID != firstID || restored.FallbackTargets[1].Priority != 2 {
+		t.Fatalf("unexpected restored targets: %#v", restored.FallbackTargets)
+	}
+	if restored.FallbackTargets[0].UserGroupRPMOverride == nil || *restored.FallbackTargets[0].UserGroupRPMOverride != firstRPM || restored.FallbackTargets[1].Group.AllowLive != true {
+		t.Fatalf("route target fields did not round-trip: %#v", restored.FallbackTargets)
+	}
+}
+
+func TestAPIKeyServiceRejectsV19AuthSnapshotWithoutRoutes(t *testing.T) {
+	apiKey, ok, err := (&APIKeyService{}).applyAuthCacheEntry("legacy-route-key", &APIKeyAuthCacheEntry{Snapshot: &APIKeyAuthSnapshot{Version: 19}})
+	if err != nil || ok || apiKey != nil {
+		t.Fatalf("expected v19 auth snapshot to be ignored after route snapshots were added: key=%#v ok=%v err=%v", apiKey, ok, err)
+	}
+}
+
 func TestAPIKeyService_RejectsV10AuthSnapshotWithoutModelsListConfig(t *testing.T) {
 	groupID := int64(9)
 	svc := &APIKeyService{}

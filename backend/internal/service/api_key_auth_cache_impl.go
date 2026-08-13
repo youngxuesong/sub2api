@@ -14,7 +14,7 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const apiKeyAuthSnapshotVersion = 19 // v19: group search/audio/video_model_prices billing fields (force refresh of pre-fix snapshots)
+const apiKeyAuthSnapshotVersion = 20 // v20: API-key fallback route snapshots
 
 type apiKeyAuthCacheConfig struct {
 	l1Size        int
@@ -336,20 +336,21 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		return nil
 	}
 	snapshot := &APIKeyAuthSnapshot{
-		Version:     apiKeyAuthSnapshotVersion,
-		APIKeyID:    apiKey.ID,
-		UserID:      apiKey.UserID,
-		GroupID:     apiKey.GroupID,
-		Name:        apiKey.Name,
-		Status:      apiKey.Status,
-		IPWhitelist: apiKey.IPWhitelist,
-		IPBlacklist: apiKey.IPBlacklist,
-		Quota:       apiKey.Quota,
-		QuotaUsed:   apiKey.QuotaUsed,
-		ExpiresAt:   apiKey.ExpiresAt,
-		RateLimit5h: apiKey.RateLimit5h,
-		RateLimit1d: apiKey.RateLimit1d,
-		RateLimit7d: apiKey.RateLimit7d,
+		Version:            apiKeyAuthSnapshotVersion,
+		APIKeyID:           apiKey.ID,
+		UserID:             apiKey.UserID,
+		GroupID:            apiKey.GroupID,
+		Name:               apiKey.Name,
+		Status:             apiKey.Status,
+		IPWhitelist:        apiKey.IPWhitelist,
+		IPBlacklist:        apiKey.IPBlacklist,
+		Quota:              apiKey.Quota,
+		QuotaUsed:          apiKey.QuotaUsed,
+		ExpiresAt:          apiKey.ExpiresAt,
+		RateLimit5h:        apiKey.RateLimit5h,
+		RateLimit1d:        apiKey.RateLimit1d,
+		RateLimit7d:        apiKey.RateLimit7d,
+		RouteConfigVersion: apiKey.RouteConfigVersion,
 		User: APIKeyAuthUserSnapshot{
 			ID:                         apiKey.User.ID,
 			Status:                     apiKey.User.Status,
@@ -376,58 +377,37 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		}
 		// 查询失败或无 override 时留 nil，checkRPM 会回退到 DB 查询
 	}
+	groupToSnapshot := func(group *Group) *APIKeyAuthGroupSnapshot {
+		if group == nil {
+			return nil
+		}
+		return &APIKeyAuthGroupSnapshot{
+			ID: group.ID, Name: group.Name, Platform: group.Platform, IsExclusive: group.IsExclusive, Status: group.Status, SubscriptionType: group.SubscriptionType, RateMultiplier: group.RateMultiplier,
+			DailyLimitUSD:  group.DailyLimitUSD,
+			WeeklyLimitUSD: group.WeeklyLimitUSD, MonthlyLimitUSD: group.MonthlyLimitUSD,
+			AllowImageGeneration: group.AllowImageGeneration, AllowBatchImageGeneration: group.AllowBatchImageGeneration,
+			ImageRateIndependent: group.ImageRateIndependent, ImageRateMultiplier: group.ImageRateMultiplier,
+			ImagePrice1K: group.ImagePrice1K, ImagePrice2K: group.ImagePrice2K, ImagePrice4K: group.ImagePrice4K,
+			VideoRateIndependent: group.VideoRateIndependent, VideoRateMultiplier: group.VideoRateMultiplier,
+			VideoPrice480P: group.VideoPrice480P, VideoPrice720P: group.VideoPrice720P, VideoPrice1080P: group.VideoPrice1080P,
+			VideoModelPrices: NormalizeVideoModelPrices(group.VideoModelPrices), WebSearchPricePerCall: group.WebSearchPricePerCall,
+			SearchPricePer1k: group.SearchPricePer1k, AudioRealtimePricePerMin: group.AudioRealtimePricePerMin,
+			AudioTTSPricePerMillionChars: group.AudioTTSPricePerMillionChars, AudioSTTPricePerHour: group.AudioSTTPricePerHour,
+			ClaudeCodeOnly: group.ClaudeCodeOnly, FallbackGroupID: group.FallbackGroupID, FallbackGroupIDOnInvalidRequest: group.FallbackGroupIDOnInvalidRequest,
+			ModelRouting: group.ModelRouting, ModelRoutingEnabled: group.ModelRoutingEnabled, MCPXMLInject: group.MCPXMLInject,
+			SupportedModelScopes: group.SupportedModelScopes, AllowMessagesDispatch: group.AllowMessagesDispatch, AllowLive: group.AllowLive,
+			DefaultMappedModel: group.DefaultMappedModel, MessagesDispatchModelConfig: group.MessagesDispatchModelConfig, ModelsListConfig: group.ModelsListConfig,
+			RPMLimit: group.RPMLimit, MaxReasoningEffort: group.MaxReasoningEffort, ReasoningEffortMappings: group.ReasoningEffortMappings,
+			PeakRateEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRateMultiplier,
+			ProfitControlEnabled: group.ProfitControlEnabled, ProfitMinMargin: group.ProfitMinMargin, ProfitSafetyBuffer: group.ProfitSafetyBuffer,
+		}
+	}
 	if apiKey.Group != nil {
-		snapshot.Group = &APIKeyAuthGroupSnapshot{
-			ID:                              apiKey.Group.ID,
-			Name:                            apiKey.Group.Name,
-			Platform:                        apiKey.Group.Platform,
-			IsExclusive:                     apiKey.Group.IsExclusive,
-			Status:                          apiKey.Group.Status,
-			SubscriptionType:                apiKey.Group.SubscriptionType,
-			RateMultiplier:                  apiKey.Group.RateMultiplier,
-			DailyLimitUSD:                   apiKey.Group.DailyLimitUSD,
-			WeeklyLimitUSD:                  apiKey.Group.WeeklyLimitUSD,
-			MonthlyLimitUSD:                 apiKey.Group.MonthlyLimitUSD,
-			AllowImageGeneration:            apiKey.Group.AllowImageGeneration,
-			AllowBatchImageGeneration:       apiKey.Group.AllowBatchImageGeneration,
-			ImageRateIndependent:            apiKey.Group.ImageRateIndependent,
-			ImageRateMultiplier:             apiKey.Group.ImageRateMultiplier,
-			ImagePrice1K:                    apiKey.Group.ImagePrice1K,
-			ImagePrice2K:                    apiKey.Group.ImagePrice2K,
-			ImagePrice4K:                    apiKey.Group.ImagePrice4K,
-			VideoRateIndependent:            apiKey.Group.VideoRateIndependent,
-			VideoRateMultiplier:             apiKey.Group.VideoRateMultiplier,
-			VideoPrice480P:                  apiKey.Group.VideoPrice480P,
-			VideoPrice720P:                  apiKey.Group.VideoPrice720P,
-			VideoPrice1080P:                 apiKey.Group.VideoPrice1080P,
-			VideoModelPrices:                NormalizeVideoModelPrices(apiKey.Group.VideoModelPrices),
-			WebSearchPricePerCall:           apiKey.Group.WebSearchPricePerCall,
-			SearchPricePer1k:                apiKey.Group.SearchPricePer1k,
-			AudioRealtimePricePerMin:        apiKey.Group.AudioRealtimePricePerMin,
-			AudioTTSPricePerMillionChars:    apiKey.Group.AudioTTSPricePerMillionChars,
-			AudioSTTPricePerHour:            apiKey.Group.AudioSTTPricePerHour,
-			ClaudeCodeOnly:                  apiKey.Group.ClaudeCodeOnly,
-			FallbackGroupID:                 apiKey.Group.FallbackGroupID,
-			FallbackGroupIDOnInvalidRequest: apiKey.Group.FallbackGroupIDOnInvalidRequest,
-			ModelRouting:                    apiKey.Group.ModelRouting,
-			ModelRoutingEnabled:             apiKey.Group.ModelRoutingEnabled,
-			MCPXMLInject:                    apiKey.Group.MCPXMLInject,
-			SupportedModelScopes:            apiKey.Group.SupportedModelScopes,
-			AllowMessagesDispatch:           apiKey.Group.AllowMessagesDispatch,
-			AllowLive:                       apiKey.Group.AllowLive,
-			DefaultMappedModel:              apiKey.Group.DefaultMappedModel,
-			MessagesDispatchModelConfig:     apiKey.Group.MessagesDispatchModelConfig,
-			ModelsListConfig:                apiKey.Group.ModelsListConfig,
-			RPMLimit:                        apiKey.Group.RPMLimit,
-			MaxReasoningEffort:              apiKey.Group.MaxReasoningEffort,
-			ReasoningEffortMappings:         apiKey.Group.ReasoningEffortMappings,
-			PeakRateEnabled:                 apiKey.Group.PeakRateEnabled,
-			PeakStart:                       apiKey.Group.PeakStart,
-			PeakEnd:                         apiKey.Group.PeakEnd,
-			PeakRateMultiplier:              apiKey.Group.PeakRateMultiplier,
-			ProfitControlEnabled:            apiKey.Group.ProfitControlEnabled,
-			ProfitMinMargin:                 apiKey.Group.ProfitMinMargin,
-			ProfitSafetyBuffer:              apiKey.Group.ProfitSafetyBuffer,
+		snapshot.Group = groupToSnapshot(apiKey.Group)
+	}
+	for _, target := range apiKey.FallbackTargets {
+		if group := groupToSnapshot(target.Group); group != nil {
+			snapshot.FallbackTargets = append(snapshot.FallbackTargets, APIKeyAuthRouteTargetSnapshot{Priority: target.Priority, Group: *group, UserGroupRPMOverride: target.UserGroupRPMOverride})
 		}
 	}
 	return snapshot
@@ -438,20 +418,21 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		return nil
 	}
 	apiKey := &APIKey{
-		ID:          snapshot.APIKeyID,
-		UserID:      snapshot.UserID,
-		GroupID:     snapshot.GroupID,
-		Key:         key,
-		Name:        snapshot.Name,
-		Status:      snapshot.Status,
-		IPWhitelist: snapshot.IPWhitelist,
-		IPBlacklist: snapshot.IPBlacklist,
-		Quota:       snapshot.Quota,
-		QuotaUsed:   snapshot.QuotaUsed,
-		ExpiresAt:   snapshot.ExpiresAt,
-		RateLimit5h: snapshot.RateLimit5h,
-		RateLimit1d: snapshot.RateLimit1d,
-		RateLimit7d: snapshot.RateLimit7d,
+		ID:                 snapshot.APIKeyID,
+		UserID:             snapshot.UserID,
+		GroupID:            snapshot.GroupID,
+		Key:                key,
+		Name:               snapshot.Name,
+		Status:             snapshot.Status,
+		IPWhitelist:        snapshot.IPWhitelist,
+		IPBlacklist:        snapshot.IPBlacklist,
+		Quota:              snapshot.Quota,
+		QuotaUsed:          snapshot.QuotaUsed,
+		ExpiresAt:          snapshot.ExpiresAt,
+		RateLimit5h:        snapshot.RateLimit5h,
+		RateLimit1d:        snapshot.RateLimit1d,
+		RateLimit7d:        snapshot.RateLimit7d,
+		RouteConfigVersion: snapshot.RouteConfigVersion,
 		User: &User{
 			ID:                         snapshot.User.ID,
 			Status:                     snapshot.User.Status,
@@ -525,6 +506,20 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 			ProfitSafetyBuffer:              snapshot.Group.ProfitSafetyBuffer,
 		}
 	}
+	for _, target := range snapshot.FallbackTargets {
+		group := authSnapshotToGroup(&target.Group)
+		if group == nil {
+			continue
+		}
+		apiKey.FallbackTargets = append(apiKey.FallbackTargets, APIKeyFailoverTarget{TargetGroupID: group.ID, Priority: target.Priority, Group: group, UserGroupRPMOverride: target.UserGroupRPMOverride, EffectiveRateMultiplier: group.RateMultiplier})
+	}
 	s.compileAPIKeyIPRules(apiKey)
 	return apiKey
+}
+
+func authSnapshotToGroup(snapshot *APIKeyAuthGroupSnapshot) *Group {
+	if snapshot == nil {
+		return nil
+	}
+	return (&APIKeyService{}).snapshotToAPIKey("", &APIKeyAuthSnapshot{Group: snapshot}).Group
 }

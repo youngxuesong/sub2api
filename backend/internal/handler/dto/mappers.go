@@ -107,6 +107,15 @@ func APIKeyFromService(k *service.APIKey) *APIKey {
 		Window7dStart:      k.Window7dStart,
 		User:               UserFromServiceShallow(k.User),
 		Group:              GroupFromServiceShallow(k.Group),
+		RouteConfigVersion: k.RouteConfigVersion,
+		FailoverEnabled:    len(k.FallbackTargets) > 0,
+		FallbackGroups:     make([]APIKeyFallbackGroup, 0, len(k.FallbackTargets)),
+	}
+	for _, target := range k.FallbackTargets {
+		if target.Group == nil {
+			continue
+		}
+		out.FallbackGroups = append(out.FallbackGroups, APIKeyFallbackGroup{ID: target.Group.ID, Name: target.Group.Name, Platform: target.Group.Platform, SubscriptionType: target.Group.SubscriptionType, RateMultiplier: target.EffectiveRateMultiplier, Priority: target.Priority})
 	}
 	if k.Window5hStart != nil && !service.IsWindowExpired(k.Window5hStart, service.RateLimitWindow5h) {
 		t := k.Window5hStart.Add(service.RateLimitWindow5h)
