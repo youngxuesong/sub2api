@@ -377,36 +377,11 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 		}
 		// 查询失败或无 override 时留 nil，checkRPM 会回退到 DB 查询
 	}
-	groupToSnapshot := func(group *Group) *APIKeyAuthGroupSnapshot {
-		if group == nil {
-			return nil
-		}
-		return &APIKeyAuthGroupSnapshot{
-			ID: group.ID, Name: group.Name, Platform: group.Platform, IsExclusive: group.IsExclusive, Status: group.Status, SubscriptionType: group.SubscriptionType, RateMultiplier: group.RateMultiplier,
-			DailyLimitUSD:  group.DailyLimitUSD,
-			WeeklyLimitUSD: group.WeeklyLimitUSD, MonthlyLimitUSD: group.MonthlyLimitUSD,
-			AllowImageGeneration: group.AllowImageGeneration, AllowBatchImageGeneration: group.AllowBatchImageGeneration,
-			ImageRateIndependent: group.ImageRateIndependent, ImageRateMultiplier: group.ImageRateMultiplier,
-			ImagePrice1K: group.ImagePrice1K, ImagePrice2K: group.ImagePrice2K, ImagePrice4K: group.ImagePrice4K,
-			VideoRateIndependent: group.VideoRateIndependent, VideoRateMultiplier: group.VideoRateMultiplier,
-			VideoPrice480P: group.VideoPrice480P, VideoPrice720P: group.VideoPrice720P, VideoPrice1080P: group.VideoPrice1080P,
-			VideoModelPrices: NormalizeVideoModelPrices(group.VideoModelPrices), WebSearchPricePerCall: group.WebSearchPricePerCall,
-			SearchPricePer1k: group.SearchPricePer1k, AudioRealtimePricePerMin: group.AudioRealtimePricePerMin,
-			AudioTTSPricePerMillionChars: group.AudioTTSPricePerMillionChars, AudioSTTPricePerHour: group.AudioSTTPricePerHour,
-			ClaudeCodeOnly: group.ClaudeCodeOnly, FallbackGroupID: group.FallbackGroupID, FallbackGroupIDOnInvalidRequest: group.FallbackGroupIDOnInvalidRequest,
-			ModelRouting: group.ModelRouting, ModelRoutingEnabled: group.ModelRoutingEnabled, MCPXMLInject: group.MCPXMLInject,
-			SupportedModelScopes: group.SupportedModelScopes, AllowMessagesDispatch: group.AllowMessagesDispatch, AllowLive: group.AllowLive,
-			DefaultMappedModel: group.DefaultMappedModel, MessagesDispatchModelConfig: group.MessagesDispatchModelConfig, ModelsListConfig: group.ModelsListConfig,
-			RPMLimit: group.RPMLimit, MaxReasoningEffort: group.MaxReasoningEffort, ReasoningEffortMappings: group.ReasoningEffortMappings,
-			PeakRateEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRateMultiplier,
-			ProfitControlEnabled: group.ProfitControlEnabled, ProfitMinMargin: group.ProfitMinMargin, ProfitSafetyBuffer: group.ProfitSafetyBuffer,
-		}
-	}
 	if apiKey.Group != nil {
-		snapshot.Group = groupToSnapshot(apiKey.Group)
+		snapshot.Group = groupToAuthSnapshot(apiKey.Group)
 	}
 	for _, target := range apiKey.FallbackTargets {
-		if group := groupToSnapshot(target.Group); group != nil {
+		if group := groupToAuthSnapshot(target.Group); group != nil {
 			rpmOverride := target.UserGroupRPMOverride
 			if s.userGroupRateRepo != nil && group.ID > 0 {
 				if override, err := s.userGroupRateRepo.GetRPMOverrideByUserAndGroup(ctx, apiKey.UserID, group.ID); err == nil {
@@ -462,59 +437,7 @@ func (s *APIKeyService) snapshotToAPIKey(key string, snapshot *APIKeyAuthSnapsho
 		},
 	}
 	if snapshot.Group != nil {
-		apiKey.Group = &Group{
-			ID:                              snapshot.Group.ID,
-			Name:                            snapshot.Group.Name,
-			Platform:                        snapshot.Group.Platform,
-			IsExclusive:                     snapshot.Group.IsExclusive,
-			Status:                          snapshot.Group.Status,
-			Hydrated:                        true,
-			SubscriptionType:                snapshot.Group.SubscriptionType,
-			RateMultiplier:                  snapshot.Group.RateMultiplier,
-			DailyLimitUSD:                   snapshot.Group.DailyLimitUSD,
-			WeeklyLimitUSD:                  snapshot.Group.WeeklyLimitUSD,
-			MonthlyLimitUSD:                 snapshot.Group.MonthlyLimitUSD,
-			AllowImageGeneration:            snapshot.Group.AllowImageGeneration,
-			AllowBatchImageGeneration:       snapshot.Group.AllowBatchImageGeneration,
-			ImageRateIndependent:            snapshot.Group.ImageRateIndependent,
-			ImageRateMultiplier:             snapshot.Group.ImageRateMultiplier,
-			ImagePrice1K:                    snapshot.Group.ImagePrice1K,
-			ImagePrice2K:                    snapshot.Group.ImagePrice2K,
-			ImagePrice4K:                    snapshot.Group.ImagePrice4K,
-			VideoRateIndependent:            snapshot.Group.VideoRateIndependent,
-			VideoRateMultiplier:             snapshot.Group.VideoRateMultiplier,
-			VideoPrice480P:                  snapshot.Group.VideoPrice480P,
-			VideoPrice720P:                  snapshot.Group.VideoPrice720P,
-			VideoPrice1080P:                 snapshot.Group.VideoPrice1080P,
-			VideoModelPrices:                NormalizeVideoModelPrices(snapshot.Group.VideoModelPrices),
-			WebSearchPricePerCall:           snapshot.Group.WebSearchPricePerCall,
-			SearchPricePer1k:                snapshot.Group.SearchPricePer1k,
-			AudioRealtimePricePerMin:        snapshot.Group.AudioRealtimePricePerMin,
-			AudioTTSPricePerMillionChars:    snapshot.Group.AudioTTSPricePerMillionChars,
-			AudioSTTPricePerHour:            snapshot.Group.AudioSTTPricePerHour,
-			ClaudeCodeOnly:                  snapshot.Group.ClaudeCodeOnly,
-			FallbackGroupID:                 snapshot.Group.FallbackGroupID,
-			FallbackGroupIDOnInvalidRequest: snapshot.Group.FallbackGroupIDOnInvalidRequest,
-			ModelRouting:                    snapshot.Group.ModelRouting,
-			ModelRoutingEnabled:             snapshot.Group.ModelRoutingEnabled,
-			MCPXMLInject:                    snapshot.Group.MCPXMLInject,
-			SupportedModelScopes:            snapshot.Group.SupportedModelScopes,
-			AllowMessagesDispatch:           snapshot.Group.AllowMessagesDispatch,
-			AllowLive:                       snapshot.Group.AllowLive,
-			DefaultMappedModel:              snapshot.Group.DefaultMappedModel,
-			MessagesDispatchModelConfig:     snapshot.Group.MessagesDispatchModelConfig,
-			ModelsListConfig:                snapshot.Group.ModelsListConfig,
-			RPMLimit:                        snapshot.Group.RPMLimit,
-			MaxReasoningEffort:              snapshot.Group.MaxReasoningEffort,
-			ReasoningEffortMappings:         snapshot.Group.ReasoningEffortMappings,
-			PeakRateEnabled:                 snapshot.Group.PeakRateEnabled,
-			PeakStart:                       snapshot.Group.PeakStart,
-			PeakEnd:                         snapshot.Group.PeakEnd,
-			PeakRateMultiplier:              snapshot.Group.PeakRateMultiplier,
-			ProfitControlEnabled:            snapshot.Group.ProfitControlEnabled,
-			ProfitMinMargin:                 snapshot.Group.ProfitMinMargin,
-			ProfitSafetyBuffer:              snapshot.Group.ProfitSafetyBuffer,
-		}
+		apiKey.Group = authSnapshotToGroup(snapshot.Group)
 	}
 	for _, target := range snapshot.FallbackTargets {
 		group := authSnapshotToGroup(&target.Group)
@@ -531,5 +454,50 @@ func authSnapshotToGroup(snapshot *APIKeyAuthGroupSnapshot) *Group {
 	if snapshot == nil {
 		return nil
 	}
-	return (&APIKeyService{}).snapshotToAPIKey("", &APIKeyAuthSnapshot{Group: snapshot}).Group
+	return &Group{
+		ID: snapshot.ID, Name: snapshot.Name, Platform: snapshot.Platform, IsExclusive: snapshot.IsExclusive, Status: snapshot.Status, Hydrated: true,
+		SubscriptionType: snapshot.SubscriptionType, RateMultiplier: snapshot.RateMultiplier,
+		DailyLimitUSD: snapshot.DailyLimitUSD, WeeklyLimitUSD: snapshot.WeeklyLimitUSD, MonthlyLimitUSD: snapshot.MonthlyLimitUSD,
+		AllowImageGeneration: snapshot.AllowImageGeneration, AllowBatchImageGeneration: snapshot.AllowBatchImageGeneration,
+		ImageRateIndependent: snapshot.ImageRateIndependent, ImageRateMultiplier: snapshot.ImageRateMultiplier,
+		ImagePrice1K: snapshot.ImagePrice1K, ImagePrice2K: snapshot.ImagePrice2K, ImagePrice4K: snapshot.ImagePrice4K,
+		VideoRateIndependent: snapshot.VideoRateIndependent, VideoRateMultiplier: snapshot.VideoRateMultiplier,
+		VideoPrice480P: snapshot.VideoPrice480P, VideoPrice720P: snapshot.VideoPrice720P, VideoPrice1080P: snapshot.VideoPrice1080P,
+		VideoModelPrices: NormalizeVideoModelPrices(snapshot.VideoModelPrices), WebSearchPricePerCall: snapshot.WebSearchPricePerCall,
+		SearchPricePer1k: snapshot.SearchPricePer1k, AudioRealtimePricePerMin: snapshot.AudioRealtimePricePerMin,
+		AudioTTSPricePerMillionChars: snapshot.AudioTTSPricePerMillionChars, AudioSTTPricePerHour: snapshot.AudioSTTPricePerHour,
+		ClaudeCodeOnly: snapshot.ClaudeCodeOnly, FallbackGroupID: snapshot.FallbackGroupID, FallbackGroupIDOnInvalidRequest: snapshot.FallbackGroupIDOnInvalidRequest,
+		ModelRouting: snapshot.ModelRouting, ModelRoutingEnabled: snapshot.ModelRoutingEnabled, MCPXMLInject: snapshot.MCPXMLInject,
+		SupportedModelScopes: snapshot.SupportedModelScopes, AllowMessagesDispatch: snapshot.AllowMessagesDispatch, AllowLive: snapshot.AllowLive,
+		DefaultMappedModel: snapshot.DefaultMappedModel, MessagesDispatchModelConfig: snapshot.MessagesDispatchModelConfig, ModelsListConfig: snapshot.ModelsListConfig,
+		RPMLimit: snapshot.RPMLimit, MaxReasoningEffort: snapshot.MaxReasoningEffort, ReasoningEffortMappings: snapshot.ReasoningEffortMappings,
+		PeakRateEnabled: snapshot.PeakRateEnabled, PeakStart: snapshot.PeakStart, PeakEnd: snapshot.PeakEnd, PeakRateMultiplier: snapshot.PeakRateMultiplier,
+		ProfitControlEnabled: snapshot.ProfitControlEnabled, ProfitMinMargin: snapshot.ProfitMinMargin, ProfitSafetyBuffer: snapshot.ProfitSafetyBuffer,
+	}
+}
+
+func groupToAuthSnapshot(group *Group) *APIKeyAuthGroupSnapshot {
+	if group == nil {
+		return nil
+	}
+	return &APIKeyAuthGroupSnapshot{
+		ID: group.ID, Name: group.Name, Platform: group.Platform, IsExclusive: group.IsExclusive, Status: group.Status,
+		SubscriptionType: group.SubscriptionType, RateMultiplier: group.RateMultiplier,
+		DailyLimitUSD: group.DailyLimitUSD, WeeklyLimitUSD: group.WeeklyLimitUSD, MonthlyLimitUSD: group.MonthlyLimitUSD,
+		AllowImageGeneration: group.AllowImageGeneration, AllowBatchImageGeneration: group.AllowBatchImageGeneration,
+		ImageRateIndependent: group.ImageRateIndependent, ImageRateMultiplier: group.ImageRateMultiplier,
+		ImagePrice1K: group.ImagePrice1K, ImagePrice2K: group.ImagePrice2K, ImagePrice4K: group.ImagePrice4K,
+		VideoRateIndependent: group.VideoRateIndependent, VideoRateMultiplier: group.VideoRateMultiplier,
+		VideoPrice480P: group.VideoPrice480P, VideoPrice720P: group.VideoPrice720P, VideoPrice1080P: group.VideoPrice1080P,
+		VideoModelPrices: NormalizeVideoModelPrices(group.VideoModelPrices), WebSearchPricePerCall: group.WebSearchPricePerCall,
+		SearchPricePer1k: group.SearchPricePer1k, AudioRealtimePricePerMin: group.AudioRealtimePricePerMin,
+		AudioTTSPricePerMillionChars: group.AudioTTSPricePerMillionChars, AudioSTTPricePerHour: group.AudioSTTPricePerHour,
+		ClaudeCodeOnly: group.ClaudeCodeOnly, FallbackGroupID: group.FallbackGroupID, FallbackGroupIDOnInvalidRequest: group.FallbackGroupIDOnInvalidRequest,
+		ModelRouting: group.ModelRouting, ModelRoutingEnabled: group.ModelRoutingEnabled, MCPXMLInject: group.MCPXMLInject,
+		SupportedModelScopes: group.SupportedModelScopes, AllowMessagesDispatch: group.AllowMessagesDispatch, AllowLive: group.AllowLive,
+		DefaultMappedModel: group.DefaultMappedModel, MessagesDispatchModelConfig: group.MessagesDispatchModelConfig, ModelsListConfig: group.ModelsListConfig,
+		RPMLimit: group.RPMLimit, MaxReasoningEffort: group.MaxReasoningEffort, ReasoningEffortMappings: group.ReasoningEffortMappings,
+		PeakRateEnabled: group.PeakRateEnabled, PeakStart: group.PeakStart, PeakEnd: group.PeakEnd, PeakRateMultiplier: group.PeakRateMultiplier,
+		ProfitControlEnabled: group.ProfitControlEnabled, ProfitMinMargin: group.ProfitMinMargin, ProfitSafetyBuffer: group.ProfitSafetyBuffer,
+	}
 }
