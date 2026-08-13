@@ -1,21 +1,36 @@
 package service
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
+
+type authSnapshotRouteRPMRepo struct {
+	UserGroupRateRepository
+	overrides map[int64]*int
+	calls     []int64
+}
+
+func (r *authSnapshotRouteRPMRepo) GetRPMOverrideByUserAndGroup(_ context.Context, _ int64, groupID int64) (*int, error) {
+	r.calls = append(r.calls, groupID)
+	return r.overrides[groupID], nil
+}
 
 func TestAPIKeyAuthSnapshotRoundTripsRouteTargets(t *testing.T) {
 	primaryID, firstID, secondID := int64(1), int64(2), int64(3)
 	firstRPM, secondRPM := 17, 29
+	rateRepo := &authSnapshotRouteRPMRepo{overrides: map[int64]*int{firstID: &firstRPM, secondID: &secondRPM}}
 	apiKey := &APIKey{
 		ID: 10, UserID: 20, Key: "route-key", GroupID: &primaryID, RouteConfigVersion: 4,
 		User:  &User{ID: 20, Status: StatusActive, Role: RoleUser},
 		Group: &Group{ID: primaryID, Name: "primary", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1},
 		FallbackTargets: []APIKeyFailoverTarget{
-			{TargetGroupID: firstID, Priority: 1, Group: &Group{ID: firstID, Name: "first", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1.5, RPMLimit: 100}, UserGroupRPMOverride: &firstRPM},
-			{TargetGroupID: secondID, Priority: 2, Group: &Group{ID: secondID, Name: "second", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 2, AllowLive: true}, UserGroupRPMOverride: &secondRPM},
+			{TargetGroupID: firstID, Priority: 1, Group: &Group{ID: firstID, Name: "first", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 1.5, RPMLimit: 100}},
+			{TargetGroupID: secondID, Priority: 2, Group: &Group{ID: secondID, Name: "second", Platform: PlatformOpenAI, Status: StatusActive, SubscriptionType: SubscriptionTypeStandard, RateMultiplier: 2, AllowLive: true}},
 		},
 	}
 
-	snapshot := (&APIKeyService{}).snapshotFromAPIKey(t.Context(), apiKey)
+	snapshot := (&APIKeyService{userGroupRateRepo: rateRepo}).snapshotFromAPIKey(t.Context(), apiKey)
 	if snapshot.Version != apiKeyAuthSnapshotVersion || snapshot.RouteConfigVersion != 4 || len(snapshot.FallbackTargets) != 2 {
 		t.Fatalf("unexpected route snapshot: %#v", snapshot)
 	}
@@ -25,6 +40,9 @@ func TestAPIKeyAuthSnapshotRoundTripsRouteTargets(t *testing.T) {
 	}
 	if restored.FallbackTargets[0].UserGroupRPMOverride == nil || *restored.FallbackTargets[0].UserGroupRPMOverride != firstRPM || restored.FallbackTargets[1].Group.AllowLive != true {
 		t.Fatalf("route target fields did not round-trip: %#v", restored.FallbackTargets)
+	}
+	if len(rateRepo.calls) != 3 || rateRepo.calls[0] != primaryID || rateRepo.calls[1] != firstID || rateRepo.calls[2] != secondID {
+		t.Fatalf("expected primary and ordered target RPM lookups, got %v", rateRepo.calls)
 	}
 }
 

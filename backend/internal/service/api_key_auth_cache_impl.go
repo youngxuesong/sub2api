@@ -407,7 +407,17 @@ func (s *APIKeyService) snapshotFromAPIKey(ctx context.Context, apiKey *APIKey) 
 	}
 	for _, target := range apiKey.FallbackTargets {
 		if group := groupToSnapshot(target.Group); group != nil {
-			snapshot.FallbackTargets = append(snapshot.FallbackTargets, APIKeyAuthRouteTargetSnapshot{Priority: target.Priority, Group: *group, UserGroupRPMOverride: target.UserGroupRPMOverride})
+			rpmOverride := target.UserGroupRPMOverride
+			if s.userGroupRateRepo != nil && group.ID > 0 {
+				if override, err := s.userGroupRateRepo.GetRPMOverrideByUserAndGroup(ctx, apiKey.UserID, group.ID); err == nil {
+					rpmOverride = override
+				}
+			}
+			snapshot.FallbackTargets = append(snapshot.FallbackTargets, APIKeyAuthRouteTargetSnapshot{
+				Priority:             target.Priority,
+				Group:                *group,
+				UserGroupRPMOverride: rpmOverride,
+			})
 		}
 	}
 	return snapshot
