@@ -732,6 +732,10 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	if s.subCacheL1 != nil {
 		if v, ok := s.subCacheL1.Get(key); ok {
 			if sub, ok := v.(*UserSubscription); ok {
+				if !s.isActiveSubscription(sub) {
+					s.subCacheL1.Del(key)
+					return nil, ErrSubscriptionNotFound
+				}
 				cp := *sub
 				return &cp, nil
 			}
@@ -743,6 +747,9 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 		sub, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, userID, groupID)
 		if err != nil {
 			return nil, err // 直接透传 repo 已翻译的错误（NotFound → ErrSubscriptionNotFound，其他错误原样返回）
+		}
+		if !s.isActiveSubscription(sub) {
+			return nil, ErrSubscriptionNotFound
 		}
 		// 写入 L1 缓存
 		if s.subCacheL1 != nil {
@@ -760,6 +767,17 @@ func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID,
 	}
 	cp := *sub
 	return &cp, nil
+}
+
+func (s *SubscriptionService) isActiveSubscription(sub *UserSubscription) bool {
+	if sub == nil || sub.Status != SubscriptionStatusActive {
+		return false
+	}
+	now := time.Now()
+	if s != nil && s.now != nil {
+		now = s.now()
+	}
+	return now.Before(sub.ExpiresAt)
 }
 
 // ListUserSubscriptions 获取用户的所有订阅
