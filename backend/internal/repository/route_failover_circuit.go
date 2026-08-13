@@ -8,23 +8,26 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
+)
+
+const (
+	routeFailoverWindow    = time.Minute
+	routeFailoverThreshold = 5
+	routeFailoverCooldown  = time.Minute
+	routeFailoverLease     = 15 * time.Second
+	routeFailoverSuccesses = 2
 )
 
 var routeFailoverAllowScript = redis.NewScript(`
 local state = redis.call('HGET', KEYS[1], 'state') or 'closed'
 if state == 'open' then
   local opened = tonumber(redis.call('HGET', KEYS[1], 'opened_at') or '0')
-  if tonumber(ARGV[1]) - opened < tonumber(ARGV[2]) then
-    return {0, 0}
-  end
+  if tonumber(ARGV[1]) - opened < tonumber(ARGV[2]) then return {0, 0} end
 end
 if state == 'open' or state == 'half_open' then
   local acquired = redis.call('SET', KEYS[2], ARGV[3], 'NX', 'PX', ARGV[4])
-  if not acquired then
-    return {0, 0}
-  end
+  if not acquired then return {0, 0} end
   redis.call('HSET', KEYS[1], 'state', 'half_open')
   return {1, 1}
 end
@@ -33,18 +36,13 @@ return {1, 0}
 
 var routeFailoverFailureScript = redis.NewScript(`
 if ARGV[5] ~= '' then
-  if redis.call('GET', KEYS[3]) ~= ARGV[5] then
-    return 0
-  end
+  if redis.call('GET', KEYS[3]) ~= ARGV[5] then return 0 end
   redis.call('DEL', KEYS[3])
 end
 local state = redis.call('HGET', KEYS[1], 'state') or 'closed'
 if state == 'half_open' then
-  if ARGV[5] == '' then
-    return 0
-  end
+  if ARGV[5] == '' then return 0 end
   redis.call('HSET', KEYS[1], 'state', 'open', 'opened_at', ARGV[1], 'successes', 0)
-  redis.call('DEL', KEYS[2])
   return 1
 end
 redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', tonumber(ARGV[1]) - tonumber(ARGV[2]))
@@ -53,23 +51,18 @@ local failures = redis.call('ZCARD', KEYS[2])
 redis.call('PEXPIRE', KEYS[2], tonumber(ARGV[2]) * 2)
 if failures >= tonumber(ARGV[3]) then
   redis.call('HSET', KEYS[1], 'state', 'open', 'opened_at', ARGV[1], 'successes', 0)
-  return 1
 end
-return 0
+return 1
 `)
 
 var routeFailoverSuccessScript = redis.NewScript(`
 if ARGV[4] ~= '' then
-  if redis.call('GET', KEYS[3]) ~= ARGV[4] then
-    return 0
-  end
+  if redis.call('GET', KEYS[3]) ~= ARGV[4] then return 0 end
   redis.call('DEL', KEYS[3])
 end
 local state = redis.call('HGET', KEYS[1], 'state') or 'closed'
 if state == 'half_open' then
-  if ARGV[4] == '' then
-    return 0
-  end
+  if ARGV[4] == '' then return 0 end
   local successes = redis.call('HINCRBY', KEYS[1], 'successes', 1)
   if successes >= tonumber(ARGV[3]) then
     redis.call('HSET', KEYS[1], 'state', 'closed', 'successes', 0)
@@ -77,7 +70,7 @@ if state == 'half_open' then
     redis.call('DEL', KEYS[2])
   end
 else
-  redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', tonumber(ARGV[1]) - tonumber(ARGV[2]))
+  redis.call('DEL', KEYS[2])
 end
 return 1
 `)
@@ -87,7 +80,9 @@ type routeFailoverCircuit struct {
 	now func() time.Time
 }
 
-func NewRouteFailoverCircuit(rdb *redis.Client) service.RouteFailoverCircuit {
+// NewRouteFailoverCircuit creates the Redis-backed route failover circuit.
+// The service-level interface is intentionally adapted by the caller.
+func NewRouteFailoverCircuit(rdb *redis.Client) *routeFailoverCircuit {
 	return newRouteFailoverCircuit(rdb, time.Now)
 }
 
@@ -95,44 +90,43 @@ func newRouteFailoverCircuit(rdb *redis.Client, now func() time.Time) *routeFail
 	return &routeFailoverCircuit{rdb: rdb, now: now}
 }
 
-func (c *routeFailoverCircuit) Allow(ctx context.Context, policy service.RouteFailoverPolicy, target service.RouteFailoverTarget, model string) (service.RouteFailoverPermit, error) {
-	stateKey, _, leaseKey := routeFailoverCircuitKeys(policy.ID, target.ID, model)
-	leaseID, err := randomRouteFailoverLeaseID()
+func (c *routeFailoverCircuit) Allow(ctx context.Context, effectiveGroupID int64, requestedModel string) (allowed, halfOpen bool, leaseID string, err error) {
+	stateKey, _, leaseKey := routeFailoverCircuitKeys(effectiveGroupID, requestedModel)
+	leaseID, err = randomRouteFailoverLeaseID()
 	if err != nil {
-		return service.RouteFailoverPermit{}, err
+		return false, false, "", err
 	}
 	result, err := routeFailoverAllowScript.Run(ctx, c.rdb, []string{stateKey, leaseKey},
-		c.now().UnixMilli(), durationMillis(policy.OpenCooldown, time.Minute), leaseID,
-		durationMillis(policy.HalfOpenLease, 15*time.Second)).Int64Slice()
+		c.now().UnixMilli(), routeFailoverCooldown.Milliseconds(), leaseID, routeFailoverLease.Milliseconds()).Int64Slice()
 	if err != nil {
-		return service.RouteFailoverPermit{}, err
+		return false, false, "", err
 	}
-	permit := service.RouteFailoverPermit{Allowed: result[0] == 1, HalfOpen: result[1] == 1}
-	if permit.HalfOpen {
-		permit.LeaseID = leaseID
+	allowed, halfOpen = result[0] == 1, result[1] == 1
+	if !halfOpen {
+		leaseID = ""
 	}
-	return permit, nil
+	return allowed, halfOpen, leaseID, nil
 }
 
-func (c *routeFailoverCircuit) RecordFailure(ctx context.Context, policy service.RouteFailoverPolicy, target service.RouteFailoverTarget, model, leaseID string) error {
-	stateKey, failuresKey, leaseKey := routeFailoverCircuitKeys(policy.ID, target.ID, model)
+func (c *routeFailoverCircuit) RecordFailure(ctx context.Context, effectiveGroupID int64, requestedModel, leaseID string) error {
+	stateKey, failuresKey, leaseKey := routeFailoverCircuitKeys(effectiveGroupID, requestedModel)
 	now := c.now().UnixMilli()
 	_, err := routeFailoverFailureScript.Run(ctx, c.rdb, []string{stateKey, failuresKey, leaseKey},
-		now, durationMillis(policy.Window, time.Minute), positiveOr(policy.FailureThreshold, 5),
+		now, routeFailoverWindow.Milliseconds(), routeFailoverThreshold,
 		fmt.Sprintf("%d:%s", now, mustRandomSuffix()), leaseID).Result()
 	return err
 }
 
-func (c *routeFailoverCircuit) RecordSuccess(ctx context.Context, policy service.RouteFailoverPolicy, target service.RouteFailoverTarget, model, leaseID string) error {
-	stateKey, failuresKey, leaseKey := routeFailoverCircuitKeys(policy.ID, target.ID, model)
+func (c *routeFailoverCircuit) RecordSuccess(ctx context.Context, effectiveGroupID int64, requestedModel, leaseID string) error {
+	stateKey, failuresKey, leaseKey := routeFailoverCircuitKeys(effectiveGroupID, requestedModel)
 	_, err := routeFailoverSuccessScript.Run(ctx, c.rdb, []string{stateKey, failuresKey, leaseKey},
-		c.now().UnixMilli(), durationMillis(policy.Window, time.Minute), positiveOr(policy.SuccessThreshold, 2), leaseID).Result()
+		c.now().UnixMilli(), routeFailoverWindow.Milliseconds(), routeFailoverSuccesses, leaseID).Result()
 	return err
 }
 
-func routeFailoverCircuitKeys(policyID, targetID int64, model string) (string, string, string) {
-	hash := sha256.Sum256([]byte(model))
-	base := fmt.Sprintf("route_failover:%d:%d:%s", policyID, targetID, hex.EncodeToString(hash[:8]))
+func routeFailoverCircuitKeys(effectiveGroupID int64, requestedModel string) (string, string, string) {
+	hash := sha256.Sum256([]byte(requestedModel))
+	base := fmt.Sprintf("route_failover:group:%d:%s", effectiveGroupID, hex.EncodeToString(hash[:8]))
 	return base + ":state", base + ":failures", base + ":lease"
 }
 
@@ -148,20 +142,6 @@ func mustRandomSuffix() string {
 	value, err := randomRouteFailoverLeaseID()
 	if err != nil {
 		return fmt.Sprintf("fallback-%d", time.Now().UnixNano())
-	}
-	return value
-}
-
-func durationMillis(value, fallback time.Duration) int64 {
-	if value <= 0 {
-		value = fallback
-	}
-	return value.Milliseconds()
-}
-
-func positiveOr(value, fallback int) int {
-	if value <= 0 {
-		return fallback
 	}
 	return value
 }

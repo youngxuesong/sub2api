@@ -73,12 +73,9 @@ type RouteFailoverGroupRepository interface {
 }
 
 type RouteFailoverCircuit interface {
-	Allow(ctx context.Context, policy RouteFailoverPolicy, target RouteFailoverTarget, model string) (RouteFailoverPermit, error)
-}
-
-type RouteFailoverCircuitRecorder interface {
-	RecordSuccess(ctx context.Context, policy RouteFailoverPolicy, target RouteFailoverTarget, model, leaseID string) error
-	RecordFailure(ctx context.Context, policy RouteFailoverPolicy, target RouteFailoverTarget, model, leaseID string) error
+	Allow(ctx context.Context, effectiveGroupID int64, requestedModel string) (allowed, halfOpen bool, leaseID string, err error)
+	RecordSuccess(ctx context.Context, effectiveGroupID int64, requestedModel, leaseID string) error
+	RecordFailure(ctx context.Context, effectiveGroupID int64, requestedModel, leaseID string) error
 }
 
 type routeFailoverSnapshotState struct {
@@ -196,14 +193,14 @@ func (p *RouteFailoverPlanner) Admit(ctx context.Context, sourceGroupID int64, c
 		if p.circuit == nil {
 			return candidate, true
 		}
-		permit, err := p.circuit.Allow(ctx, policy, target, candidate.CircuitModel)
+		allowed, _, leaseID, err := p.circuit.Allow(ctx, target.TargetGroupID, candidate.CircuitModel)
 		if err != nil {
 			return candidate, true
 		}
-		if !permit.Allowed {
+		if !allowed {
 			return candidate, false
 		}
-		candidate.LeaseID = permit.LeaseID
+		candidate.LeaseID = leaseID
 		return candidate, true
 	}
 	return candidate, false
@@ -221,8 +218,7 @@ func (p *RouteFailoverPlanner) record(ctx context.Context, sourceGroupID int64, 
 	if !candidate.IsFallback || candidate.TargetID == 0 {
 		return
 	}
-	recorder, ok := p.circuit.(RouteFailoverCircuitRecorder)
-	if !ok {
+	if p.circuit == nil {
 		return
 	}
 	p.mu.RLock()
@@ -236,9 +232,9 @@ func (p *RouteFailoverPlanner) record(ctx context.Context, sourceGroupID int64, 
 			continue
 		}
 		if success {
-			_ = recorder.RecordSuccess(ctx, policy, target, candidate.CircuitModel, candidate.LeaseID)
+			_ = p.circuit.RecordSuccess(ctx, target.TargetGroupID, candidate.CircuitModel, candidate.LeaseID)
 		} else {
-			_ = recorder.RecordFailure(ctx, policy, target, candidate.CircuitModel, candidate.LeaseID)
+			_ = p.circuit.RecordFailure(ctx, target.TargetGroupID, candidate.CircuitModel, candidate.LeaseID)
 		}
 		return
 	}

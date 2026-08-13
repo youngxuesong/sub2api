@@ -112,26 +112,33 @@ type routeFailoverRecordingCircuit struct {
 	recordFailed bool
 }
 
-func (s *routeFailoverRecordingCircuit) Allow(_ context.Context, _ RouteFailoverPolicy, _ RouteFailoverTarget, model string) (RouteFailoverPermit, error) {
+func (s *routeFailoverRecordingCircuit) Allow(_ context.Context, _ int64, model string) (bool, bool, string, error) {
 	s.allowModel = model
-	return RouteFailoverPermit{Allowed: true, LeaseID: "lease-1"}, nil
+	return true, false, "lease-1", nil
 }
 
-func (s *routeFailoverRecordingCircuit) RecordSuccess(context.Context, RouteFailoverPolicy, RouteFailoverTarget, string, string) error {
+func (s *routeFailoverRecordingCircuit) RecordSuccess(context.Context, int64, string, string) error {
 	return nil
 }
 
-func (s *routeFailoverRecordingCircuit) RecordFailure(_ context.Context, _ RouteFailoverPolicy, _ RouteFailoverTarget, model, _ string) error {
+func (s *routeFailoverRecordingCircuit) RecordFailure(_ context.Context, _ int64, model, _ string) error {
 	s.recordModel = model
 	s.recordFailed = true
 	return nil
 }
 
-func (s routeFailoverCircuitStub) Allow(_ context.Context, _ RouteFailoverPolicy, target RouteFailoverTarget, _ string) (RouteFailoverPermit, error) {
+func (s routeFailoverCircuitStub) Allow(_ context.Context, effectiveGroupID int64, _ string) (bool, bool, string, error) {
 	if s.err != nil {
-		return RouteFailoverPermit{}, s.err
+		return false, false, "", s.err
 	}
-	return RouteFailoverPermit{Allowed: !s.open[target.TargetGroupID]}, nil
+	return !s.open[effectiveGroupID], false, "", nil
+}
+
+func (s routeFailoverCircuitStub) RecordSuccess(context.Context, int64, string, string) error {
+	return nil
+}
+func (s routeFailoverCircuitStub) RecordFailure(context.Context, int64, string, string) error {
+	return nil
 }
 
 func TestRouteFailoverPlannerCandidatesOrderSnapshotTargetsAndAdmitCircuit(t *testing.T) {

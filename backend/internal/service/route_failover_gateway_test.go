@@ -62,10 +62,10 @@ func TestReleaseUnadmittedRouteSelectionReleasesOnce(t *testing.T) {
 	require.Nil(t, selection.ReleaseFunc)
 }
 
-func (c *routeFailoverGatewayCircuit) Allow(_ context.Context, _ RouteFailoverPolicy, target RouteFailoverTarget, _ string) (RouteFailoverPermit, error) {
+func (c *routeFailoverGatewayCircuit) Allow(_ context.Context, effectiveGroupID int64, _ string) (bool, bool, string, error) {
 	c.allows++
-	c.targets = append(c.targets, target.ID)
-	return RouteFailoverPermit{Allowed: true, LeaseID: "lease"}, nil
+	c.targets = append(c.targets, effectiveGroupID)
+	return true, false, "lease", nil
 }
 
 func TestGatewayRouteFailoverAcquiresLeaseOnlyForAttemptedCandidate(t *testing.T) {
@@ -95,7 +95,7 @@ func TestGatewayRouteFailoverAcquiresLeaseOnlyForAttemptedCandidate(t *testing.T
 
 	require.NoError(t, err)
 	require.Equal(t, int64(22), selection.Account.ID)
-	require.Equal(t, []int64{7}, circuit.targets)
+	require.Equal(t, []int64{2}, circuit.targets)
 }
 
 func TestGatewayRouteFailoverSkipsCapacityFailuresWithoutTouchingCircuit(t *testing.T) {
@@ -124,15 +124,15 @@ func TestGatewayRouteFailoverSkipsCapacityFailuresWithoutTouchingCircuit(t *test
 
 	require.NoError(t, err)
 	require.Equal(t, int64(33), selection.Account.ID)
-	require.Equal(t, []int64{8}, circuit.targets)
+	require.Equal(t, []int64{3}, circuit.targets)
 	require.Zero(t, circuit.failures)
 }
 
-func (c *routeFailoverGatewayCircuit) RecordSuccess(context.Context, RouteFailoverPolicy, RouteFailoverTarget, string, string) error {
+func (c *routeFailoverGatewayCircuit) RecordSuccess(context.Context, int64, string, string) error {
 	c.successes++
 	return nil
 }
-func (c *routeFailoverGatewayCircuit) RecordFailure(context.Context, RouteFailoverPolicy, RouteFailoverTarget, string, string) error {
+func (c *routeFailoverGatewayCircuit) RecordFailure(context.Context, int64, string, string) error {
 	c.failures++
 	return nil
 }
@@ -379,7 +379,7 @@ func TestOpenAIGatewayRouteFailoverSkipsCapacityFailuresWithoutTouchingCircuit(t
 
 	require.NoError(t, err)
 	require.Equal(t, int64(33), selection.Account.ID)
-	require.Equal(t, []int64{8}, circuit.targets)
+	require.Equal(t, []int64{3}, circuit.targets)
 	require.Zero(t, circuit.failures)
 }
 

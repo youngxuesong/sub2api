@@ -2,52 +2,115 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRouteFailoverCircuitOpensAndAllowsSingleHalfOpenProbe(t *testing.T) {
+func TestRouteFailoverCircuitUsesGroupAndRequestedModelRedisKeys(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	circuit := newRouteFailoverCircuit(client, time.Now)
+	ctx := context.Background()
+
+	for i := 0; i < routeFailoverThreshold; i++ {
+		require.NoError(t, circuit.RecordFailure(ctx, 42, "claude-sonnet", ""))
+	}
+	allowed, _, _, err := circuit.Allow(ctx, 42, "claude-sonnet")
+	require.NoError(t, err)
+	require.False(t, allowed)
+
+	allowed, _, _, err = circuit.Allow(ctx, 43, "claude-sonnet")
+	require.NoError(t, err)
+	require.True(t, allowed, "a different effective group must have an isolated circuit")
+	allowed, _, _, err = circuit.Allow(ctx, 42, "claude-opus")
+	require.NoError(t, err)
+	require.True(t, allowed, "a different requested model must have an isolated circuit")
+
+	hash := sha256.Sum256([]byte("claude-sonnet"))
+	prefix := "route_failover:group:42:" + hex.EncodeToString(hash[:8])
+	require.True(t, server.Exists(prefix+":state"))
+	require.True(t, server.Exists(prefix+":failures"))
+}
+
+func TestRouteFailoverCircuitOpensAfterFiveFailuresAndRequiresTwoHalfOpenSuccesses(t *testing.T) {
 	server := miniredis.RunT(t)
 	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 	now := time.Unix(1_700_000_000, 0)
 	circuit := newRouteFailoverCircuit(client, func() time.Time { return now })
-	policy := service.RouteFailoverPolicy{
-		ID: 1, FailureThreshold: 2, SuccessThreshold: 1,
-		Window: time.Minute, OpenCooldown: 30 * time.Second, HalfOpenLease: 10 * time.Second,
-	}
-	target := service.RouteFailoverTarget{ID: 9, TargetGroupID: 2}
 	ctx := context.Background()
 
-	permit, err := circuit.Allow(ctx, policy, target, "claude-sonnet")
+	for i := 0; i < routeFailoverThreshold-1; i++ {
+		require.NoError(t, circuit.RecordFailure(ctx, 2, "model", ""))
+		allowed, _, _, err := circuit.Allow(ctx, 2, "model")
+		require.NoError(t, err)
+		require.True(t, allowed)
+	}
+	require.NoError(t, circuit.RecordFailure(ctx, 2, "model", ""))
+	allowed, _, _, err := circuit.Allow(ctx, 2, "model")
 	require.NoError(t, err)
-	require.True(t, permit.Allowed)
-	require.NoError(t, circuit.RecordFailure(ctx, policy, target, "claude-sonnet", ""))
-	require.NoError(t, circuit.RecordFailure(ctx, policy, target, "claude-sonnet", ""))
+	require.False(t, allowed)
 
-	permit, err = circuit.Allow(ctx, policy, target, "claude-sonnet")
+	now = now.Add(routeFailoverCooldown + time.Millisecond)
+	allowed, halfOpen, firstLease, err := circuit.Allow(ctx, 2, "model")
 	require.NoError(t, err)
-	require.False(t, permit.Allowed)
+	require.True(t, allowed)
+	require.True(t, halfOpen)
+	require.NotEmpty(t, firstLease)
 
-	now = now.Add(31 * time.Second)
-	first, err := circuit.Allow(ctx, policy, target, "claude-sonnet")
+	allowed, _, _, err = circuit.Allow(ctx, 2, "model")
 	require.NoError(t, err)
-	require.True(t, first.Allowed)
-	require.True(t, first.HalfOpen)
-	require.NotEmpty(t, first.LeaseID)
-	second, err := circuit.Allow(ctx, policy, target, "claude-sonnet")
-	require.NoError(t, err)
-	require.False(t, second.Allowed)
+	require.False(t, allowed, "the half-open lease admits only one probe at a time")
 
-	require.NoError(t, circuit.RecordSuccess(ctx, policy, target, "claude-sonnet", first.LeaseID))
-	permit, err = circuit.Allow(ctx, policy, target, "claude-sonnet")
+	require.NoError(t, circuit.RecordSuccess(ctx, 2, "model", firstLease))
+	allowed, halfOpen, secondLease, err := circuit.Allow(ctx, 2, "model")
 	require.NoError(t, err)
-	require.True(t, permit.Allowed)
-	require.False(t, permit.HalfOpen)
+	require.True(t, allowed)
+	require.True(t, halfOpen)
+	require.NoError(t, circuit.RecordSuccess(ctx, 2, "model", secondLease))
+
+	allowed, halfOpen, _, err = circuit.Allow(ctx, 2, "model")
+	require.NoError(t, err)
+	require.True(t, allowed)
+	require.False(t, halfOpen)
+}
+
+func TestRouteFailoverCircuitClosedSuccessClearsFailureWindow(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	circuit := newRouteFailoverCircuit(client, time.Now)
+	ctx := context.Background()
+
+	for i := 0; i < routeFailoverThreshold-1; i++ {
+		require.NoError(t, circuit.RecordFailure(ctx, 7, "model", ""))
+	}
+	require.NoError(t, circuit.RecordSuccess(ctx, 7, "model", ""))
+	require.NoError(t, circuit.RecordFailure(ctx, 7, "model", ""))
+	allowed, _, _, err := circuit.Allow(ctx, 7, "model")
+	require.NoError(t, err)
+	require.True(t, allowed, "a closed-state success must clear prior failures")
+}
+
+func TestRouteFailoverCircuitExpiresFailuresOutsideFixedWindow(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	now := time.Unix(1_700_000_000, 0)
+	circuit := newRouteFailoverCircuit(client, func() time.Time { return now })
+	ctx := context.Background()
+
+	for i := 0; i < routeFailoverThreshold-1; i++ {
+		require.NoError(t, circuit.RecordFailure(ctx, 7, "model", ""))
+	}
+	now = now.Add(routeFailoverWindow + time.Millisecond)
+	require.NoError(t, circuit.RecordFailure(ctx, 7, "model", ""))
+	allowed, _, _, err := circuit.Allow(ctx, 7, "model")
+	require.NoError(t, err)
+	require.True(t, allowed)
 }
 
 func TestRouteFailoverCircuitIgnoresExpiredHalfOpenLeaseResults(t *testing.T) {
@@ -57,38 +120,32 @@ func TestRouteFailoverCircuitIgnoresExpiredHalfOpenLeaseResults(t *testing.T) {
 			client := redis.NewClient(&redis.Options{Addr: server.Addr()})
 			now := time.Unix(1_700_000_000, 0)
 			circuit := newRouteFailoverCircuit(client, func() time.Time { return now })
-			policy := service.RouteFailoverPolicy{
-				ID: 1, FailureThreshold: 1, SuccessThreshold: 1,
-				Window: time.Minute, OpenCooldown: time.Second, HalfOpenLease: time.Second,
-			}
-			target := service.RouteFailoverTarget{ID: 9, TargetGroupID: 2}
 			ctx := context.Background()
 
-			require.NoError(t, circuit.RecordFailure(ctx, policy, target, "model", ""))
-			now = now.Add(2 * time.Second)
-			first, err := circuit.Allow(ctx, policy, target, "model")
+			for i := 0; i < routeFailoverThreshold; i++ {
+				require.NoError(t, circuit.RecordFailure(ctx, 2, "model", ""))
+			}
+			now = now.Add(routeFailoverCooldown + time.Millisecond)
+			_, _, firstLease, err := circuit.Allow(ctx, 2, "model")
 			require.NoError(t, err)
-			require.True(t, first.HalfOpen)
-
-			server.FastForward(2 * time.Second)
-			second, err := circuit.Allow(ctx, policy, target, "model")
+			server.FastForward(routeFailoverLease + time.Millisecond)
+			_, _, secondLease, err := circuit.Allow(ctx, 2, "model")
 			require.NoError(t, err)
-			require.True(t, second.HalfOpen)
-			require.NotEqual(t, first.LeaseID, second.LeaseID)
 
 			if outcome == "success" {
-				require.NoError(t, circuit.RecordSuccess(ctx, policy, target, "model", first.LeaseID))
+				require.NoError(t, circuit.RecordSuccess(ctx, 2, "model", firstLease))
 			} else {
-				require.NoError(t, circuit.RecordFailure(ctx, policy, target, "model", first.LeaseID))
+				require.NoError(t, circuit.RecordFailure(ctx, 2, "model", firstLease))
 			}
-			blocked, err := circuit.Allow(ctx, policy, target, "model")
+			allowed, _, _, err := circuit.Allow(ctx, 2, "model")
 			require.NoError(t, err)
-			require.False(t, blocked.Allowed, "an expired probe result must not override the active lease")
+			require.False(t, allowed)
 
-			require.NoError(t, circuit.RecordSuccess(ctx, policy, target, "model", second.LeaseID))
-			allowed, err := circuit.Allow(ctx, policy, target, "model")
+			require.NoError(t, circuit.RecordSuccess(ctx, 2, "model", secondLease))
+			server.FastForward(routeFailoverLease + time.Millisecond)
+			_, _, thirdLease, err := circuit.Allow(ctx, 2, "model")
 			require.NoError(t, err)
-			require.True(t, allowed.Allowed)
+			require.NoError(t, circuit.RecordSuccess(ctx, 2, "model", thirdLease))
 		})
 	}
 }
