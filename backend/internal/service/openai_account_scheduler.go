@@ -2138,7 +2138,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerAndRouteFailover(
 	platform string,
 	previousResponseCanMove bool,
 	useUpstreamTokenCost bool,
-	enableRouteFailover bool,
+	_ bool,
 ) (*AccountSelectionResult, OpenAIAccountScheduleDecision, error) {
 	primary, decision, primaryErr := s.selectAccountWithScheduler(
 		ctx, groupID, previousResponseID, sessionHash, requestedModel, excludedIDs,
@@ -2153,56 +2153,7 @@ func (s *OpenAIGatewayService) selectAccountWithSchedulerAndRouteFailover(
 		}
 		return primary, decision, nil
 	}
-	if !enableRouteFailover || s.routeFailoverPlanner == nil || groupID == nil || *groupID <= 0 || !routeFailoverSelectionExhausted(primaryErr) {
-		return nil, decision, primaryErr
-	}
-
-	sourceGroupID := *groupID
-	candidates, err := s.routeFailoverPlanner.Candidates(ctx, sourceGroupID, requestedModel)
-	if err != nil || len(candidates) <= 1 {
-		return nil, decision, primaryErr
-	}
-	lastErr := primaryErr
-	lastDecision := decision
-	for _, candidate := range candidates[1:] {
-		effectiveGroupID := candidate.GroupID
-		mapping, _ := s.ResolveChannelMappingAndRestrict(ctx, &effectiveGroupID, candidate.Model)
-		if mapping.Mapped && strings.TrimSpace(mapping.MappedModel) != "" {
-			candidate.Model = mapping.MappedModel
-		}
-		selection, fallbackDecision, selectErr := s.selectAccountWithScheduler(
-			ctx, &effectiveGroupID, previousResponseID, sessionHash, candidate.Model,
-			excludedIDs, requiredTransport, requiredCapability, requiredImageCapability,
-			requireCompact, platform, previousResponseCanMove, useUpstreamTokenCost,
-		)
-		lastDecision = fallbackDecision
-		if selectErr == nil {
-			admitted, allowed := s.routeFailoverPlanner.Admit(ctx, sourceGroupID, candidate)
-			if !allowed {
-				releaseUnadmittedRouteSelection(selection)
-				continue
-			}
-			candidate = admitted
-			if selection != nil {
-				selection.EffectiveGroupID = effectiveGroupID
-				selection.RouteSourceGroupID = sourceGroupID
-				selection.RouteTargetID = candidate.TargetID
-				selection.EffectiveModel = candidate.Model
-				selection.RouteCircuitModel = candidate.CircuitModel
-				selection.RouteLeaseID = candidate.LeaseID
-			}
-			return selection, fallbackDecision, nil
-		}
-		lastErr = selectErr
-		if !routeFailoverSelectionExhausted(selectErr) {
-			return nil, fallbackDecision, selectErr
-		}
-	}
-	return nil, lastDecision, lastErr
-}
-
-func routeFailoverSelectionExhausted(err error) bool {
-	return errors.Is(err, ErrNoAvailableAccounts) || errors.Is(err, ErrNoAvailableCompactAccounts)
+	return nil, decision, primaryErr
 }
 
 func (s *OpenAIGatewayService) selectAccountWithScheduler(
