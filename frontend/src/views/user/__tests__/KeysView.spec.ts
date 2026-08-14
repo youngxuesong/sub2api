@@ -11,6 +11,7 @@ const {
   getDashboardApiKeysUsage,
   getAvailableGroups,
   getUserGroupRates,
+  createKey,
   showError,
   showSuccess,
   copyToClipboard,
@@ -22,6 +23,7 @@ const {
   getDashboardApiKeysUsage: vi.fn(),
   getAvailableGroups: vi.fn(),
   getUserGroupRates: vi.fn(),
+  createKey: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
   copyToClipboard: vi.fn(),
@@ -53,12 +55,13 @@ const messages: Record<string, string> = {
   'keys.status.inactive': 'Inactive',
   'keys.status.quota_exhausted': 'Quota exhausted',
   'keys.usage': 'Usage',
+  'keys.fallbackRiskRequired': 'Acknowledge failover risk',
 }
 
 vi.mock('@/api', () => ({
   keysAPI: {
     list: listKeys,
-    create: vi.fn(),
+    create: createKey,
     update: vi.fn(),
     delete: vi.fn(),
     toggleStatus: vi.fn(),
@@ -215,7 +218,32 @@ const IconStub = {
   template: '<span data-test="icon">{{ name }}</span>',
 }
 
-const mountView = async () => {
+const BaseDialogFormStub = {
+  props: ['show'],
+  template: '<div v-if="show" data-test="key-dialog"><slot /><slot name="footer" /></div>',
+}
+
+const FallbackGroupSelectorStub = {
+  name: 'FallbackGroupSelector',
+  props: ['modelValue', 'riskAcknowledged'],
+  emits: ['update:modelValue', 'update:riskAcknowledged'],
+  template: `
+    <div>
+      <button
+        type="button"
+        data-test="choose-fallbacks"
+        @click="$emit('update:modelValue', [2, 3]); $emit('update:riskAcknowledged', false)"
+      >Choose fallbacks</button>
+      <button
+        type="button"
+        data-test="acknowledge-risk"
+        @click="$emit('update:riskAcknowledged', true)"
+      >Acknowledge risk</button>
+    </div>
+  `,
+}
+
+const mountView = async (renderKeyForm = false) => {
   const wrapper = mount(KeysView, {
     global: {
       stubs: {
@@ -223,7 +251,7 @@ const mountView = async () => {
         TablePageLayout: TablePageLayoutStub,
         DataTable: DataTableStub,
         Pagination: PaginationStub,
-        BaseDialog: true,
+        BaseDialog: renderKeyForm ? BaseDialogFormStub : true,
         ConfirmDialog: true,
         EmptyState: true,
         Select: SelectStub,
@@ -233,6 +261,7 @@ const mountView = async () => {
         EndpointPopover: true,
         GroupBadge: true,
         GroupOptionItem: true,
+        FallbackGroupSelector: renderKeyForm ? FallbackGroupSelectorStub : true,
         Teleport: true,
       },
     },
@@ -265,6 +294,7 @@ describe('user KeysView column settings', () => {
     getDashboardApiKeysUsage.mockReset()
     getAvailableGroups.mockReset()
     getUserGroupRates.mockReset()
+    createKey.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
     copyToClipboard.mockReset()
@@ -282,6 +312,7 @@ describe('user KeysView column settings', () => {
     getDashboardApiKeysUsage.mockResolvedValue({ stats: {} })
     getAvailableGroups.mockResolvedValue([])
     getUserGroupRates.mockResolvedValue({})
+    createKey.mockResolvedValue(createApiKey())
     isCurrentStep.mockReturnValue(false)
   })
 
@@ -436,6 +467,44 @@ describe('user KeysView column settings', () => {
         sort_order: 'asc',
       },
       expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
+  })
+
+  it('requires risk acknowledgement before creating a key with fallback groups', async () => {
+    getAvailableGroups.mockResolvedValue([
+      { id: 1, name: 'Primary' },
+      { id: 2, name: 'Fallback 2' },
+      { id: 3, name: 'Fallback 3' },
+    ])
+    const wrapper = await mountView(true)
+
+    await getButtonByText(wrapper, 'Create API Key').trigger('click')
+    await wrapper.get('[data-tour="key-form-name"]').setValue('Route key')
+    const groupSelect = wrapper.findAllComponents({ name: 'Select' })
+      .find((select) => select.attributes('data-tour') === 'key-form-group')
+    expect(groupSelect).toBeDefined()
+    await groupSelect!.vm.$emit('update:modelValue', 1)
+    await wrapper.get('[data-test="choose-fallbacks"]').trigger('click')
+
+    await wrapper.get('#key-form').trigger('submit')
+    expect(showError).toHaveBeenCalledWith('Acknowledge failover risk')
+    expect(createKey).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-test="acknowledge-risk"]').trigger('click')
+    await wrapper.get('#key-form').trigger('submit')
+    await flushPromises()
+
+    expect(createKey).toHaveBeenCalledWith(
+      'Route key',
+      1,
+      undefined,
+      [],
+      [],
+      0,
+      undefined,
+      { rate_limit_5h: 0, rate_limit_1d: 0, rate_limit_7d: 0 },
+      [2, 3],
+      true,
     )
   })
 })

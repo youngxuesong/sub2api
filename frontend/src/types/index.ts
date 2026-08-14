@@ -747,6 +747,9 @@ export interface ApiKey {
   created_at: string
   updated_at: string
   current_concurrency: number
+  route_config_version?: number
+  failover_enabled?: boolean
+  fallback_groups?: ApiKeyFallbackGroup[]
   group?: Group
   rate_limit_5h: number
   rate_limit_1d: number
@@ -762,6 +765,15 @@ export interface ApiKey {
   reset_7d_at: string | null
 }
 
+export interface ApiKeyFallbackGroup {
+  id: number
+  name: string
+  platform: string
+  subscription_type: string
+  rate_multiplier: number
+  priority: number
+}
+
 export interface CreateApiKeyRequest {
   name: string
   group_id?: number | null
@@ -773,6 +785,8 @@ export interface CreateApiKeyRequest {
   rate_limit_5h?: number
   rate_limit_1d?: number
   rate_limit_7d?: number
+  fallback_group_ids?: number[]
+  failover_risk_acknowledged?: boolean
 }
 
 export interface UpdateApiKeyRequest {
@@ -788,6 +802,8 @@ export interface UpdateApiKeyRequest {
   rate_limit_1d?: number
   rate_limit_7d?: number
   reset_rate_limit_usage?: boolean
+  fallback_group_ids?: number[]
+  failover_risk_acknowledged?: boolean
 }
 
 export interface CreateGroupRequest {

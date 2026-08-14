@@ -507,6 +507,14 @@
           </Select>
         </div>
 
+        <FallbackGroupSelector
+          v-model="formData.fallback_group_ids"
+          v-model:risk-acknowledged="formData.failover_risk_acknowledged"
+          :groups="groups"
+          :fallback-groups="selectedKey?.fallback_groups || []"
+          :primary-group-id="formData.group_id"
+        />
+
         <!-- Custom Key Section (only for create) -->
         <div v-if="!showEditModal" class="space-y-3">
           <div class="flex items-center justify-between">
@@ -1117,7 +1125,7 @@
 </template>
 
 <script setup lang="ts">
-	import { ref, reactive, computed, onMounted, onUnmounted, type ComponentPublicInstance } from 'vue'
+	import { ref, reactive, computed, onMounted, onUnmounted, watch, type ComponentPublicInstance } from 'vue'
 	import { useI18n } from 'vue-i18n'
 	import { useAppStore } from '@/stores/app'
 	import { useOnboardingStore } from '@/stores/onboarding'
@@ -1137,6 +1145,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import SearchInput from '@/components/common/SearchInput.vue'
 	import Icon from '@/components/icons/Icon.vue'
 	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
+	import FallbackGroupSelector from '@/components/keys/FallbackGroupSelector.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
 	import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
@@ -1145,6 +1154,7 @@ import type { Column } from '@/components/common/types'
 import type { BatchApiKeyUsageStats } from '@/api/usage'
 import { formatDateTime } from '@/utils/format'
 import { maskApiKey } from '@/utils/maskApiKey'
+import { sanitizeFallbackGroupIds } from '@/utils/apiKeyRoute'
 import {
   buildCcSwitchImportDeeplink,
   type CcSwitchClientType
@@ -1330,6 +1340,8 @@ const setGroupButtonRef = (keyId: number, el: Element | ComponentPublicInstance 
 const formData = ref({
   name: '',
   group_id: null as number | null,
+  fallback_group_ids: [] as number[],
+  failover_risk_acknowledged: false,
   status: 'active' as 'active' | 'inactive',
   use_custom_key: false,
   custom_key: '',
@@ -1347,6 +1359,16 @@ const formData = ref({
   enable_expiration: false,
   expiration_preset: '30' as '7' | '30' | '90' | 'custom',
   expiration_date: ''
+})
+
+watch(() => formData.value.group_id, (primaryGroupId) => {
+  const fallbackGroupIds = sanitizeFallbackGroupIds(
+    formData.value.fallback_group_ids,
+    primaryGroupId
+  )
+  if (fallbackGroupIds.length === formData.value.fallback_group_ids.length) return
+  formData.value.fallback_group_ids = fallbackGroupIds
+  formData.value.failover_risk_acknowledged = false
 })
 
 // 自定义Key验证
@@ -1564,6 +1586,10 @@ const editKey = (key: ApiKey) => {
   formData.value = {
     name: key.name,
     group_id: key.group_id,
+    fallback_group_ids: [...(key.fallback_groups || [])]
+      .sort((left, right) => left.priority - right.priority)
+      .map((group) => group.id),
+    failover_risk_acknowledged: (key.fallback_groups?.length || 0) > 0,
     status: key.status === 'quota_exhausted' || key.status === 'expired' ? 'inactive' : key.status,
     use_custom_key: false,
     custom_key: '',
@@ -1668,6 +1694,11 @@ const handleSubmit = async () => {
     return
   }
 
+  if (formData.value.fallback_group_ids.length > 0 && !formData.value.failover_risk_acknowledged) {
+    appStore.showError(t('keys.fallbackRiskRequired'))
+    return
+  }
+
   // Validate custom key if enabled
   if (!showEditModal.value && formData.value.use_custom_key) {
     if (!formData.value.custom_key) {
@@ -1728,6 +1759,8 @@ const handleSubmit = async () => {
         rate_limit_5h: rateLimitData.rate_limit_5h,
         rate_limit_1d: rateLimitData.rate_limit_1d,
         rate_limit_7d: rateLimitData.rate_limit_7d,
+        fallback_group_ids: formData.value.fallback_group_ids,
+        failover_risk_acknowledged: formData.value.failover_risk_acknowledged,
       }
       if (shouldSubmitEditStatus(selectedKey.value, formData.value.status)) {
         updates.status = formData.value.status
@@ -1744,7 +1777,9 @@ const handleSubmit = async () => {
         ipBlacklist,
         quota,
         expiresInDays,
-        rateLimitData
+        rateLimitData,
+        formData.value.fallback_group_ids,
+        formData.value.failover_risk_acknowledged
       )
       appStore.showSuccess(t('keys.keyCreatedSuccess'))
       // Only advance tour if active, on submit step, and creation succeeded
@@ -1790,6 +1825,8 @@ const closeModals = () => {
   formData.value = {
     name: '',
     group_id: null,
+    fallback_group_ids: [],
+    failover_risk_acknowledged: false,
     status: 'active',
     use_custom_key: false,
     custom_key: '',
