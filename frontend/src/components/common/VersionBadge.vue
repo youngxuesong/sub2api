@@ -12,7 +12,9 @@
         ]"
         :title="hasUpdate ? t('version.updateAvailable') : t('version.upToDate')"
       >
-        <span v-if="currentVersion" class="font-medium">v{{ currentVersion }}</span>
+        <span v-if="currentVersion" class="font-medium" :title="currentVersion">
+          {{ displayCurrentVersion }}
+        </span>
         <span
           v-else
           class="h-3 w-12 animate-pulse rounded bg-gray-200 font-medium dark:bg-dark-600"
@@ -84,7 +86,8 @@
                   <span
                     v-if="currentVersion"
                     class="text-2xl font-bold text-gray-900 dark:text-white"
-                    >v{{ currentVersion }}</span
+                    :title="currentVersion"
+                    >{{ displayCurrentVersion }}</span
                   >
                   <span v-else class="text-2xl font-bold text-gray-400 dark:text-dark-500">--</span>
                   <!-- Show check mark when up to date -->
@@ -108,7 +111,7 @@
                 <p class="mt-1 text-xs text-gray-500 dark:text-dark-400">
                   {{
                     hasUpdate
-                      ? t('version.latestVersion') + ': v' + latestVersion
+                      ? t('version.latestVersion') + ': ' + displayLatestVersion
                       : t('version.upToDate')
                   }}
                 </p>
@@ -255,7 +258,7 @@
                       {{ t('version.updateAvailable') }}
                     </p>
                     <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
-                      v{{ latestVersion }}
+                      {{ displayLatestVersion }}
                     </p>
                   </div>
                   <svg
@@ -312,7 +315,7 @@
                       {{ t('version.updateAvailable') }}
                     </p>
                     <p class="text-xs text-amber-600/70 dark:text-amber-400/70">
-                      v{{ latestVersion }}
+                      {{ displayLatestVersion }}
                     </p>
                   </div>
                 </div>
@@ -501,12 +504,13 @@
                             </span>
                             <span
                               class="text-sm font-semibold"
+                              :title="item.version"
                               :class="
                                 selectedRollbackVersion === item.version
                                   ? 'text-amber-700 dark:text-amber-300'
                                   : 'text-gray-700 dark:text-dark-200'
                               "
-                              >v{{ item.version }}</span
+                              >{{ formatVersionLabel(item.version) }}</span
                             >
                           </span>
                           <span class="text-[11px] tabular-nums text-gray-400 dark:text-dark-500">
@@ -613,7 +617,7 @@
                                 rollingBack
                                   ? t('version.rollingBack')
                                   : t('version.rollbackConfirm', {
-                                      version: 'v' + selectedRollbackVersion
+                                      version: formatVersionLabel(selectedRollbackVersion)
                                     })
                               }}</span>
                             </button>
@@ -631,8 +635,12 @@
     </template>
 
     <!-- Non-admin: Simple static version text -->
-    <span v-else-if="version" class="text-xs text-gray-500 dark:text-dark-400">
-      v{{ version }}
+    <span
+      v-else-if="version"
+      class="text-xs text-gray-500 dark:text-dark-400"
+      :title="version"
+    >
+      {{ formatVersionLabel(version) }}
     </span>
   </div>
 </template>
@@ -650,6 +658,7 @@ import {
 } from '@/api/admin/system'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/icons/Icon.vue'
+import { formatVersionLabel } from '@/utils/versionDisplay'
 
 const GITHUB_REPO = 'Wei-Shaw/sub2api'
 // Docker Hub image published by CI (tags carry no "v" prefix, e.g. weishaw/sub2api:0.1.146)
@@ -673,6 +682,8 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const loading = computed(() => appStore.versionLoading)
 const currentVersion = computed(() => appStore.currentVersion || props.version || '')
 const latestVersion = computed(() => appStore.latestVersion)
+const displayCurrentVersion = computed(() => formatVersionLabel(currentVersion.value))
+const displayLatestVersion = computed(() => formatVersionLabel(latestVersion.value))
 const hasUpdate = computed(() => appStore.hasUpdate)
 const releaseInfo = computed(() => appStore.releaseInfo)
 const buildType = computed(() => appStore.buildType)

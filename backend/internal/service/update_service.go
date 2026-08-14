@@ -658,7 +658,12 @@ func parseVersion(v string) [3]int {
 	parts := strings.Split(v, ".")
 	result := [3]int{0, 0, 0}
 	for i := 0; i < len(parts) && i < 3; i++ {
-		if parsed, err := strconv.Atoi(parts[i]); err == nil {
+		part := parts[i]
+		digitEnd := 0
+		for digitEnd < len(part) && part[digitEnd] >= '0' && part[digitEnd] <= '9' {
+			digitEnd++
+		}
+		if parsed, err := strconv.Atoi(part[:digitEnd]); err == nil {
 			result[i] = parsed
 		}
 	}
