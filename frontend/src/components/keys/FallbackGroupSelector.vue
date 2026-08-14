@@ -20,7 +20,23 @@
       :disabled="modelValue.length >= MAX_API_KEY_FALLBACK_GROUPS"
       :aria-label="t('keys.addFallbackGroup')"
       @update:model-value="handleAdd"
-    />
+    >
+      <template #option="{ option, selected }">
+        <GroupOptionItem
+          :name="(option as unknown as FallbackGroupOption).label"
+          :platform="(option as unknown as FallbackGroupOption).platform"
+          :subscription-type="(option as unknown as FallbackGroupOption).subscriptionType"
+          :rate-multiplier="(option as unknown as FallbackGroupOption).rate"
+          :user-rate-multiplier="(option as unknown as FallbackGroupOption).userRate"
+          :peak-rate-enabled="(option as unknown as FallbackGroupOption).peakRateEnabled"
+          :peak-start="(option as unknown as FallbackGroupOption).peakStart"
+          :peak-end="(option as unknown as FallbackGroupOption).peakEnd"
+          :peak-rate-multiplier="(option as unknown as FallbackGroupOption).peakRateMultiplier"
+          :description="(option as unknown as FallbackGroupOption).description"
+          :selected="selected"
+        />
+      </template>
+    </Select>
 
     <ol
       v-if="selectedGroups.length > 0"
@@ -97,8 +113,14 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
+import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Select from '@/components/common/Select.vue'
-import type { ApiKeyFallbackGroup, Group } from '@/types'
+import type {
+  ApiKeyFallbackGroup,
+  Group,
+  GroupPlatform,
+  SubscriptionType
+} from '@/types'
 import {
   MAX_API_KEY_FALLBACK_GROUPS,
   appendFallbackGroupId,
@@ -108,14 +130,30 @@ import {
 
 const { t } = useI18n()
 
+interface FallbackGroupOption {
+  value: number
+  label: string
+  description: string | null
+  rate: number
+  userRate: number | null
+  peakRateEnabled: boolean
+  peakStart: string
+  peakEnd: string
+  peakRateMultiplier: number
+  subscriptionType: SubscriptionType
+  platform: GroupPlatform
+}
+
 const props = withDefaults(defineProps<{
   groups: Group[]
   fallbackGroups?: ApiKeyFallbackGroup[]
+  userGroupRates?: Record<number, number>
   primaryGroupId: number | null
   modelValue: number[]
   riskAcknowledged: boolean
 }>(), {
-  fallbackGroups: () => []
+  fallbackGroups: () => [],
+  userGroupRates: () => ({})
 })
 
 const emit = defineEmits<{
@@ -130,7 +168,15 @@ const availableGroupOptions = computed(() => props.groups
   .map((group) => ({
     value: group.id,
     label: group.name,
-    description: group.description
+    description: group.description,
+    rate: group.rate_multiplier,
+    userRate: props.userGroupRates[group.id] ?? null,
+    peakRateEnabled: group.peak_rate_enabled,
+    peakStart: group.peak_start,
+    peakEnd: group.peak_end,
+    peakRateMultiplier: group.peak_rate_multiplier,
+    subscriptionType: group.subscription_type,
+    platform: group.platform
   })))
 
 const groupNameById = computed(() => {

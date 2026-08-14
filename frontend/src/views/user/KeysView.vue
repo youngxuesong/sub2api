@@ -512,6 +512,7 @@
           v-model:risk-acknowledged="formData.failover_risk_acknowledged"
           :groups="groups"
           :fallback-groups="selectedKey?.fallback_groups || []"
+          :user-group-rates="userGroupRates"
           :primary-group-id="formData.group_id"
         />
 
