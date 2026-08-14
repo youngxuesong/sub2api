@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"go.uber.org/zap"
 )
 
 func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID, groupID int64, groupDefaultMultiplier float64) float64 {
@@ -340,6 +342,7 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil || cmd.RequestID == "" || repo == nil {
 		postUsageBilling(ctx, p, deps)
+		logAPIKeyRouteBilling(ctx, requestID, usageLog, "legacy_unverified")
 		return true, nil
 	}
 
@@ -348,11 +351,18 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 
 	result, err := repo.Apply(billingCtx, cmd)
 	if err != nil {
+		if errors.Is(err, ErrUsageBillingRequestConflict) && usageLog != nil && usageLog.SourceGroupID != nil {
+			RecordAPIKeyRouteBillingIdempotencyConflict()
+			logAPIKeyRouteBilling(billingCtx, requestID, usageLog, "conflict")
+		} else {
+			logAPIKeyRouteBilling(billingCtx, requestID, usageLog, "error")
+		}
 		return false, err
 	}
 
 	if result == nil || !result.Applied {
 		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
+		logAPIKeyRouteBilling(billingCtx, requestID, usageLog, "replayed")
 		return false, nil
 	}
 
@@ -363,7 +373,32 @@ func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog
 	}
 
 	finalizePostUsageBilling(billingCtx, p, deps, result)
+	logAPIKeyRouteBilling(billingCtx, requestID, usageLog, "applied")
 	return true, nil
+}
+
+func logAPIKeyRouteBilling(ctx context.Context, requestID string, usageLog *UsageLog, result string) {
+	if usageLog == nil || usageLog.SourceGroupID == nil || usageLog.GroupID == nil {
+		return
+	}
+	fields := []zap.Field{
+		zap.String("billing_request_id", requestID),
+		zap.Int64("api_key_id", usageLog.APIKeyID),
+		zap.Int64("source_group_id", *usageLog.SourceGroupID),
+		zap.Int64("effective_group_id", *usageLog.GroupID),
+		zap.Bool("route_fallback_used", usageLog.RouteFallbackUsed),
+		zap.Int("route_attempt_count", usageLog.RouteAttemptCount),
+		zap.Bool("route_sticky_hit", usageLog.RouteStickyHit),
+		zap.Float64("effective_multiplier", usageLog.RateMultiplier),
+		zap.String("billing_result", result),
+	}
+	if usageLog.RouteFallbackReason != nil {
+		fields = append(fields, zap.String("route_fallback_reason", *usageLog.RouteFallbackReason))
+	}
+	if usageLog.SubscriptionID != nil {
+		fields = append(fields, zap.Int64("effective_subscription_id", *usageLog.SubscriptionID))
+	}
+	logger.FromContext(ctx).Info("api_key_route.billing", fields...)
 }
 
 func finalizePostUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {

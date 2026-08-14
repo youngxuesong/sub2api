@@ -118,6 +118,7 @@ type APIKeyRouteAttemptFailure struct {
 	Class             RouteFailureClass
 	StatusCode        int
 	ReplaySafe        bool
+	RecordCircuit     bool
 	SemanticCommitted bool
 	Cause             error
 }
@@ -216,10 +217,12 @@ func (p *APIKeyRoutePlan) Next(ctx context.Context) (*APIKeyRouteCandidate, bool
 		}
 		subscription := cloneUserSubscription(target.subscription)
 		eligible := true
+		skipReason := RouteFailureAdmission
 		if target.isFallback {
-			subscription, eligible = p.admitTarget(ctx, target)
+			subscription, eligible, skipReason = p.admitTarget(ctx, target)
 		}
 		if !eligible {
+			RecordAPIKeyRouteCandidateSkip(skipReason)
 			if target.stickyHit {
 				p.deleteSticky(ctx)
 				p.rebuildPrimaryFirst()
@@ -235,7 +238,11 @@ func (p *APIKeyRoutePlan) Next(ctx context.Context) (*APIKeyRouteCandidate, bool
 		}
 		if target.isFallback && p.planner.circuit != nil {
 			allowed, _, leaseID, err := p.planner.circuit.Allow(ctx, target.groupID, p.requestedModel)
+			if err != nil {
+				RecordAPIKeyRouteStoreError()
+			}
 			if err == nil && !allowed {
+				RecordAPIKeyRouteCandidateSkip(RouteFailureAdmission)
 				if target.stickyHit {
 					p.deleteSticky(ctx)
 					p.rebuildPrimaryFirst()
@@ -246,21 +253,25 @@ func (p *APIKeyRoutePlan) Next(ctx context.Context) (*APIKeyRouteCandidate, bool
 				candidate.CircuitLeaseID = leaseID
 			}
 		}
+		if candidate.StickyHit {
+			p.audit.StickyHit = true
+		}
 		p.audit.AttemptCount++
 		return candidate, true
 	}
 	return nil, false
 }
 
-func (p *APIKeyRoutePlan) Skip(ctx context.Context, candidate *APIKeyRouteCandidate, class RouteFailureClass) {
+func (p *APIKeyRoutePlan) Skip(ctx context.Context, candidate *APIKeyRouteCandidate, class RouteFailureClass) bool {
 	if p == nil || candidate == nil {
-		return
+		return false
 	}
 	p.captureFallbackReason(class)
 	if candidate.StickyHit {
 		p.deleteSticky(ctx)
 		p.rebuildPrimaryFirst()
 	}
+	return !contextDone(ctx) && !p.routeSwitchExpired() && p.hasRemainingCandidate()
 }
 
 func (p *APIKeyRoutePlan) Fail(ctx context.Context, candidate *APIKeyRouteCandidate, failure APIKeyRouteAttemptFailure) bool {
@@ -278,8 +289,10 @@ func (p *APIKeyRoutePlan) Fail(ctx context.Context, candidate *APIKeyRouteCandid
 		p.deleteSticky(ctx)
 		p.rebuildPrimaryFirst()
 	}
-	if routeFailureRecordsCircuit(failure.Class) && p.planner.circuit != nil {
-		_ = p.planner.circuit.RecordFailure(ctx, candidate.EffectiveGroupID, p.requestedModel, candidate.CircuitLeaseID)
+	if failure.RecordCircuit && routeFailureRecordsCircuit(failure.Class) && p.planner.circuit != nil {
+		if err := p.planner.circuit.RecordFailure(ctx, candidate.EffectiveGroupID, p.requestedModel, candidate.CircuitLeaseID); err != nil {
+			RecordAPIKeyRouteStoreError()
+		}
 	}
 	return !contextDone(ctx) && !p.routeSwitchExpired() && p.hasRemainingCandidate()
 }
@@ -290,19 +303,25 @@ func (p *APIKeyRoutePlan) Succeed(ctx context.Context, candidate *APIKeyRouteCan
 	}
 	p.audit.FallbackUsed = candidate.IsFallback
 	if p.planner.circuit != nil {
-		_ = p.planner.circuit.RecordSuccess(ctx, candidate.EffectiveGroupID, p.requestedModel, candidate.CircuitLeaseID)
+		if err := p.planner.circuit.RecordSuccess(ctx, candidate.EffectiveGroupID, p.requestedModel, candidate.CircuitLeaseID); err != nil {
+			RecordAPIKeyRouteStoreError()
+		}
 	}
 	if !candidate.IsFallback || p.sessionHash == "" || p.planner.sticky == nil {
 		return
 	}
 	if candidate.StickyHit {
-		_ = p.planner.sticky.Refresh(ctx, p.apiKeyID, p.sessionHash, APIKeyRouteStickyTTL)
+		if err := p.planner.sticky.Refresh(ctx, p.apiKeyID, p.sessionHash, APIKeyRouteStickyTTL); err != nil {
+			RecordAPIKeyRouteStoreError()
+		}
 		return
 	}
-	_ = p.planner.sticky.Set(ctx, p.apiKeyID, p.sessionHash, APIKeyRouteStickyBinding{
+	if err := p.planner.sticky.Set(ctx, p.apiKeyID, p.sessionHash, APIKeyRouteStickyBinding{
 		RouteConfigVersion: p.routeVersion,
 		EffectiveGroupID:   candidate.EffectiveGroupID,
-	}, APIKeyRouteStickyTTL)
+	}, APIKeyRouteStickyTTL); err != nil {
+		RecordAPIKeyRouteStoreError()
+	}
 }
 
 func (p *APIKeyRoutePlan) Audit() RouteUsageAudit {
@@ -317,10 +336,15 @@ func (p *APIKeyRoutePlan) applySticky(ctx context.Context) {
 		return
 	}
 	binding, err := p.planner.sticky.Get(ctx, p.apiKeyID, p.sessionHash)
-	if err != nil || binding == nil {
+	if err != nil {
+		RecordAPIKeyRouteStoreError()
+		return
+	}
+	if binding == nil {
 		return
 	}
 	if binding.RouteConfigVersion != p.routeVersion || binding.EffectiveGroupID == p.sourceGroupID {
+		RecordAPIKeyRouteInvalidSticky()
 		p.deleteSticky(ctx)
 		return
 	}
@@ -332,45 +356,49 @@ func (p *APIKeyRoutePlan) applySticky(ctx context.Context) {
 		}
 	}
 	if index < 0 {
+		RecordAPIKeyRouteInvalidSticky()
 		p.deleteSticky(ctx)
 		return
 	}
-	if _, eligible := p.admitTarget(ctx, &p.targets[index]); !eligible {
+	if _, eligible, _ := p.admitTarget(ctx, &p.targets[index]); !eligible {
+		RecordAPIKeyRouteInvalidSticky()
 		p.deleteSticky(ctx)
 		return
 	}
 	stickyTarget := p.targets[index]
 	stickyTarget.stickyHit = true
 	p.targets = append([]apiKeyRoutePlanTarget{stickyTarget}, append(p.targets[:index], p.targets[index+1:]...)...)
-	p.audit.StickyHit = true
 }
 
-func (p *APIKeyRoutePlan) admitTarget(ctx context.Context, target *apiKeyRoutePlanTarget) (*UserSubscription, bool) {
+func (p *APIKeyRoutePlan) admitTarget(ctx context.Context, target *apiKeyRoutePlanTarget) (*UserSubscription, bool, RouteFailureClass) {
 	if target == nil || target.apiKey == nil || target.apiKey.Group == nil || target.apiKey.User == nil || contextDone(ctx) {
-		return nil, false
+		return nil, false, RouteFailureAdmission
 	}
 	group := target.apiKey.Group
-	if !isConcreteRouteGroup(group) || group.Platform != p.targetsPrimaryPlatform() || !groupSupportsRequestedModel(group, p.requestedModel) {
-		return nil, false
+	if !isConcreteRouteGroup(group) || group.Platform != p.targetsPrimaryPlatform() {
+		return nil, false, RouteFailureAdmission
+	}
+	if !groupSupportsRequestedModel(group, p.requestedModel) {
+		return nil, false, RouteFailureUnsupportedModel
 	}
 	if !group.IsSubscriptionType() {
 		if !target.apiKey.User.CanBindGroup(group.ID, group.IsExclusive) {
-			return nil, false
+			return nil, false, RouteFailureAdmission
 		}
-		return nil, true
+		return nil, true, ""
 	}
 	if target.subscription != nil && target.subscription.UserID == target.apiKey.User.ID && target.subscription.GroupID == group.ID {
-		return cloneUserSubscription(target.subscription), true
+		return cloneUserSubscription(target.subscription), true, ""
 	}
 	if p.planner.subscriptions == nil {
-		return nil, false
+		return nil, false, RouteFailureAdmission
 	}
 	subscription, err := p.planner.subscriptions.GetActiveSubscription(ctx, target.apiKey.User.ID, group.ID)
 	if err != nil || subscription == nil {
-		return nil, false
+		return nil, false, RouteFailureAdmission
 	}
 	target.subscription = cloneUserSubscription(subscription)
-	return cloneUserSubscription(subscription), true
+	return cloneUserSubscription(subscription), true, ""
 }
 
 func (p *APIKeyRoutePlan) targetsPrimaryPlatform() string {
@@ -408,7 +436,9 @@ func (p *APIKeyRoutePlan) deleteSticky(ctx context.Context) {
 	if p == nil || p.sessionHash == "" || p.planner.sticky == nil {
 		return
 	}
-	_ = p.planner.sticky.Delete(ctx, p.apiKeyID, p.sessionHash)
+	if err := p.planner.sticky.Delete(ctx, p.apiKeyID, p.sessionHash); err != nil {
+		RecordAPIKeyRouteStoreError()
+	}
 }
 
 func (p *APIKeyRoutePlan) captureFallbackReason(class RouteFailureClass) {

@@ -124,7 +124,7 @@ func nextRouteGroup(t *testing.T, plan *APIKeyRoutePlan) *APIKeyRouteCandidate {
 }
 
 func retryableRouteFailure(class RouteFailureClass) APIKeyRouteAttemptFailure {
-	return APIKeyRouteAttemptFailure{Class: class, ReplaySafe: true}
+	return APIKeyRouteAttemptFailure{Class: class, ReplaySafe: true, RecordCircuit: true}
 }
 
 func TestAPIKeyRoutePlanPrimaryOnlyAndOrderedFallbacks(t *testing.T) {
@@ -284,6 +284,24 @@ func TestAPIKeyRoutePlanDeletesStickyBindingWhenTargetIsNoLongerEligible(t *test
 	}
 }
 
+func TestAPIKeyRoutePlanOpenCircuitStickyTargetIsNotReportedAsHit(t *testing.T) {
+	sticky := &apiKeyRouteStickyStub{binding: &APIKeyRouteStickyBinding{RouteConfigVersion: 7, EffectiveGroupID: 2}}
+	circuit := &apiKeyRouteCircuitStub{allowByGroup: map[int64]bool{2: false}}
+	plan := NewAPIKeyRoutePlanner(sticky, circuit, nil).NewPlan(
+		context.Background(),
+		routePlanTestKey(routePlanTarget(2, 1), routePlanTarget(3, 2)),
+		nil,
+		"session",
+		"gpt-5",
+	)
+
+	candidate := nextRouteGroup(t, plan)
+	require.Equal(t, int64(1), candidate.EffectiveGroupID)
+	require.False(t, candidate.StickyHit)
+	require.False(t, plan.Audit().StickyHit)
+	require.Equal(t, 1, sticky.deleteCalls)
+}
+
 func TestAPIKeyRoutePlanSkipsIneligibleAndUnsupportedTargets(t *testing.T) {
 	inactive := routePlanTarget(2, 1)
 	inactive.Group.Status = StatusDisabled
@@ -367,8 +385,9 @@ func TestAPIKeyRoutePlanFailureReplayAndCircuitRules(t *testing.T) {
 	}{
 		{name: "connection", failure: retryableRouteFailure(RouteFailureConnection), wantNext: true, wantRecord: true},
 		{name: "timeout", failure: retryableRouteFailure(RouteFailureTimeout), wantNext: true, wantRecord: true},
-		{name: "upstream deadline timeout", failure: APIKeyRouteAttemptFailure{Class: RouteFailureTimeout, ReplaySafe: true, Cause: context.DeadlineExceeded}, wantNext: true, wantRecord: true},
-		{name: "429", failure: APIKeyRouteAttemptFailure{Class: RouteFailureUpstream429, StatusCode: 429, ReplaySafe: true}, wantNext: true, wantRecord: true},
+		{name: "upstream deadline timeout", failure: APIKeyRouteAttemptFailure{Class: RouteFailureTimeout, ReplaySafe: true, RecordCircuit: true, Cause: context.DeadlineExceeded}, wantNext: true, wantRecord: true},
+		{name: "429", failure: APIKeyRouteAttemptFailure{Class: RouteFailureUpstream429, StatusCode: 429, ReplaySafe: true, RecordCircuit: true}, wantNext: true, wantRecord: true},
+		{name: "eligible unscoped failure", failure: APIKeyRouteAttemptFailure{Class: RouteFailureUpstream5xx, StatusCode: 503, ReplaySafe: true}, wantNext: true},
 		{name: "5xx", failure: retryableRouteFailure(RouteFailureUpstream5xx), wantNext: true, wantRecord: true},
 		{name: "capacity", failure: retryableRouteFailure(RouteFailureCapacity), wantNext: true},
 		{name: "business", failure: retryableRouteFailure(RouteFailureBusiness)},
@@ -436,9 +455,42 @@ func TestAPIKeyRoutePlanRequestCancellationStopsSwitching(t *testing.T) {
 }
 
 func TestAPIKeyRoutePlanStickyStoreErrorsFailOpen(t *testing.T) {
+	before := GetAPIKeyRouteMetricsSnapshot()
 	sticky := &apiKeyRouteStickyStub{getErr: errors.New("redis unavailable"), setErr: errors.New("redis unavailable")}
 	plan := NewAPIKeyRoutePlanner(sticky, nil, nil).NewPlan(context.Background(), routePlanTestKey(routePlanTarget(2, 1)), nil, "session", "gpt-5")
 	require.Equal(t, int64(1), nextRouteGroup(t, plan).EffectiveGroupID)
+	after := GetAPIKeyRouteMetricsSnapshot()
+	require.Equal(t, before.StoreErrors+1, after.StoreErrors)
+}
+
+func TestAPIKeyRoutePlanRecordsCandidateSkipAndInvalidStickyMetrics(t *testing.T) {
+	unsupported := routePlanTarget(2, 1)
+	unsupported.Group.ModelsListConfig = GroupModelsListConfig{Enabled: true, Models: []string{"gpt-other"}}
+	subscriptionTarget := routePlanTarget(3, 2)
+	subscriptionTarget.Group.SubscriptionType = SubscriptionTypeSubscription
+	circuit := &apiKeyRouteCircuitStub{allowByGroup: map[int64]bool{4: false}}
+	subscriptions := &SubscriptionService{userSubRepo: apiKeyRouteSubscriptionRepoStub{subscriptions: map[int64]*UserSubscription{}}}
+	key := routePlanTestKey(unsupported, subscriptionTarget, routePlanTarget(4, 3), routePlanTarget(5, 4))
+	before := GetAPIKeyRouteMetricsSnapshot()
+
+	plan := NewAPIKeyRoutePlanner(nil, circuit, subscriptions).NewPlan(context.Background(), key, nil, "", "gpt-5")
+	primary := nextRouteGroup(t, plan)
+	require.True(t, plan.Fail(context.Background(), primary, retryableRouteFailure(RouteFailureCapacity)))
+	require.Equal(t, int64(5), nextRouteGroup(t, plan).EffectiveGroupID)
+
+	after := GetAPIKeyRouteMetricsSnapshot()
+	require.Equal(t, before.CandidateSkips[RouteFailureUnsupportedModel]+1, after.CandidateSkips[RouteFailureUnsupportedModel])
+	require.Equal(t, before.CandidateSkips[RouteFailureAdmission]+2, after.CandidateSkips[RouteFailureAdmission])
+
+	stale := &apiKeyRouteStickyStub{
+		binding:   &APIKeyRouteStickyBinding{RouteConfigVersion: 6, EffectiveGroupID: 2},
+		deleteErr: errors.New("redis unavailable"),
+	}
+	before = GetAPIKeyRouteMetricsSnapshot()
+	NewAPIKeyRoutePlanner(stale, nil, nil).NewPlan(context.Background(), routePlanTestKey(routePlanTarget(2, 1)), nil, "session", "gpt-5")
+	after = GetAPIKeyRouteMetricsSnapshot()
+	require.Equal(t, before.InvalidStickyRecords+1, after.InvalidStickyRecords)
+	require.Equal(t, before.StoreErrors+1, after.StoreErrors)
 }
 
 func TestAPIKeyRoutePlanPreservesRequestedModel(t *testing.T) {

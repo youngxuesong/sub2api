@@ -282,6 +282,17 @@ func TestAPIKeyRouteValidation(t *testing.T) {
 	})
 }
 
+func TestAPIKeyRouteValidationFailureRecordsMetric(t *testing.T) {
+	before := GetAPIKeyRouteMetricsSnapshot()
+	svc := &APIKeyService{}
+
+	_, err := svc.validateFallbackGroups(context.Background(), nil, nil, []int64{1, 2, 3, 4, 5, 6})
+	require.ErrorIs(t, err, ErrFailoverTooManyTargets)
+
+	after := GetAPIKeyRouteMetricsSnapshot()
+	require.Equal(t, before.ConfigValidationFailures+1, after.ConfigValidationFailures)
+}
+
 func TestAPIKeyRouteCreateValidatesStructureBeforePrimaryCompatibility(t *testing.T) {
 	user := &User{ID: 9, Status: StatusActive}
 
@@ -315,6 +326,7 @@ func TestAPIKeyRouteCreateRequiresAckForNonEmptyChain(t *testing.T) {
 	repo := newAPIKeyRouteRepoStub(nil)
 	svc := newAPIKeyRouteTestService(repo, groups, user)
 	primaryID := int64(1)
+	metricsBefore := GetAPIKeyRouteMetricsSnapshot()
 
 	_, err := svc.Create(context.Background(), user.ID, CreateAPIKeyRequest{
 		Name:             "route key",
@@ -323,6 +335,7 @@ func TestAPIKeyRouteCreateRequiresAckForNonEmptyChain(t *testing.T) {
 	})
 	require.ErrorIs(t, err, ErrFailoverAckRequired)
 	require.Zero(t, repo.createWithRouteCalls)
+	require.Equal(t, metricsBefore.ConfigValidationFailures+1, GetAPIKeyRouteMetricsSnapshot().ConfigValidationFailures)
 
 	created, err := svc.Create(context.Background(), user.ID, CreateAPIKeyRequest{
 		Name:                     "route key",

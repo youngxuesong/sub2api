@@ -574,6 +574,14 @@ func ProvideRouteFailoverManager(
 	return NewRouteFailoverManager(repo, groupRepo, planner)
 }
 
+func ProvideAPIKeyRoutePlanner(
+	sticky APIKeyRouteStickyStore,
+	circuit RouteFailoverCircuit,
+	subscriptions *SubscriptionService,
+) *APIKeyRoutePlanner {
+	return NewAPIKeyRoutePlanner(sticky, circuit, subscriptions)
+}
+
 // ProvideScheduledTestRunnerService creates and starts ScheduledTestRunnerService.
 func ProvideScheduledTestRunnerService(
 	planRepo ScheduledTestPlanRepository,
@@ -778,6 +786,7 @@ var ProviderSet = wire.NewSet(
 	NewCompositeRouteResolver,
 	ProvideRouteFailoverPlanner,
 	ProvideRouteFailoverManager,
+	ProvideAPIKeyRoutePlanner,
 	NewAccountService,
 	NewProxyService,
 	NewRedeemService,

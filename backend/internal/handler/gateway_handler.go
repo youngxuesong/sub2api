@@ -57,6 +57,16 @@ type GatewayHandler struct {
 	maxAccountSwitchesGemini  int
 	cfg                       *config.Config
 	settingService            *service.SettingService
+	routePlanner              *service.APIKeyRoutePlanner
+}
+
+// SetAPIKeyRoutePlanner attaches the immutable API-key route planner used by
+// compatible gateway handlers. Keeping this as a setter preserves the small
+// constructor used by unit tests and alternate embedders.
+func (h *GatewayHandler) SetAPIKeyRoutePlanner(planner *service.APIKeyRoutePlanner) {
+	if h != nil {
+		h.routePlanner = planner
+	}
 }
 
 func effectiveSelectionGroupID(selection *service.AccountSelectionResult, original *int64) *int64 {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
@@ -44,6 +45,7 @@ func TestRouteFailoverCircuitOpensAfterFiveFailuresAndRequiresTwoHalfOpenSuccess
 	now := time.Unix(1_700_000_000, 0)
 	circuit := newRouteFailoverCircuit(client, func() time.Time { return now })
 	ctx := context.Background()
+	metricsBefore := service.GetAPIKeyRouteMetricsSnapshot()
 
 	for i := 0; i < routeFailoverThreshold-1; i++ {
 		require.NoError(t, circuit.RecordFailure(ctx, 2, "model", ""))
@@ -78,6 +80,10 @@ func TestRouteFailoverCircuitOpensAfterFiveFailuresAndRequiresTwoHalfOpenSuccess
 	require.NoError(t, err)
 	require.True(t, allowed)
 	require.False(t, halfOpen)
+	metricsAfter := service.GetAPIKeyRouteMetricsSnapshot()
+	require.Equal(t, metricsBefore.CircuitTransitions[service.RouteCircuitOpened]+1, metricsAfter.CircuitTransitions[service.RouteCircuitOpened])
+	require.Equal(t, metricsBefore.CircuitTransitions[service.RouteCircuitHalfOpen]+1, metricsAfter.CircuitTransitions[service.RouteCircuitHalfOpen])
+	require.Equal(t, metricsBefore.CircuitTransitions[service.RouteCircuitClosed]+1, metricsAfter.CircuitTransitions[service.RouteCircuitClosed])
 }
 
 func TestRouteFailoverCircuitClosedSuccessClearsFailureWindow(t *testing.T) {

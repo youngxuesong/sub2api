@@ -487,7 +487,12 @@ func (s *APIKeyService) validateFallbackGroups(
 	user *User,
 	primary *Group,
 	targetIDs []int64,
-) ([]APIKeyFailoverTarget, error) {
+) (_ []APIKeyFailoverTarget, err error) {
+	defer func() {
+		if isAPIKeyRouteValidationError(err) {
+			RecordAPIKeyRouteConfigValidationFailure()
+		}
+	}()
 	if len(targetIDs) > MaxAPIKeyFallbackGroups {
 		return nil, ErrFailoverTooManyTargets
 	}
@@ -558,6 +563,14 @@ func (s *APIKeyService) validateFallbackGroups(
 		})
 	}
 	return targets, nil
+}
+
+func isAPIKeyRouteValidationError(err error) bool {
+	return errors.Is(err, ErrFailoverTooManyTargets) ||
+		errors.Is(err, ErrFailoverDuplicateTarget) ||
+		errors.Is(err, ErrFailoverPrimaryAsTarget) ||
+		errors.Is(err, ErrFailoverTargetNotAllowed) ||
+		errors.Is(err, ErrFailoverTargetIncompatible)
 }
 
 func attachValidatedFallbackTargets(key *APIKey, targets []APIKeyFailoverTarget) {
@@ -679,6 +692,7 @@ func (s *APIKeyService) Create(ctx context.Context, userID int64, req CreateAPIK
 			return nil, validateErr
 		}
 		if !req.FailoverRiskAcknowledged {
+			RecordAPIKeyRouteConfigValidationFailure()
 			return nil, ErrFailoverAckRequired
 		}
 	}
@@ -1052,6 +1066,7 @@ func (s *APIKeyService) Update(ctx context.Context, id int64, userID int64, req 
 					return nil, err
 				}
 				if !req.FailoverRiskAcknowledged {
+					RecordAPIKeyRouteConfigValidationFailure()
 					return nil, ErrFailoverAckRequired
 				}
 			}
